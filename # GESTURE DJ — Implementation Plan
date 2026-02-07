@@ -1,0 +1,758 @@
+# GESTURE DJ — Implementation Plan
+
+## Project Summary
+
+A webcam-powered DJ booth where hand gestures replace physical controls, a 3D visualization reacts to music + audience energy, and an AI agent (Dedalus + K2 Think) reasons about crowd sentiment from paid votes (Flowglad) to autonomously adjust the set.
+
+**Prize Tracks:** Popular Vote, Dedalus ADK, Flowglad, K2 Think, Computer Use (SafetyKit)
+
+---
+
+## Team Split & Parallel Workstreams
+
+| Stream | Owner | Deliverable | Depends On |
+|--------|-------|-------------|------------|
+| **A: CV + Audio Engine** | You | Webcam → gesture detection → audio parameter control | Nothing (start immediately) |
+| **B: 3D Visualization** | Teammates | Three.js/R3F scene reacting to audio + energy + agent params | VizParams interface from Stream A |
+| **C: Voting + Payments** | You (or split) | Flowglad checkout → vote submission → aggregation | Flowglad account (done) |
+| **D: Agent System** | You | Dedalus SDK → K2 Think reasoning → parameter adjustments | Streams A, B, C feeding data |
+
+**Critical path:** A → B (in parallel once interface defined) → C → D layers on top.
+
+---
+
+## Phase 1: CV + Audio Engine (Hours 0–4)
+
+### 1.1 MediaPipe Hands Setup
+
+```bash
+npm install @mediapipe/hands @mediapipe/camera_utils
+```
+
+Or use CDN in browser:
+```html
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+```
+
+Core loop:
+```javascript
+const hands = new Hands({ locateFile: (file) => 
+  `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` 
+});
+
+hands.setOptions({
+  maxNumHands: 2,
+  modelComplexity: 1,    // 0=lite, 1=full — use 1 for accuracy
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.6,
+});
+
+hands.onResults((results) => {
+  // results.multiHandLandmarks = array of 21 landmarks per hand
+  // Each landmark: { x: 0-1, y: 0-1, z: depth }
+  const params = gestureClassifier.process(results.multiHandLandmarks);
+  audioEngine.applyParams(params);
+  vizBridge.sendParams(params);
+});
+
+const camera = new Camera(videoElement, {
+  onFrame: async () => { await hands.send({ image: videoElement }); },
+  width: 640,
+  height: 480,
+});
+camera.start();
+```
+
+### 1.2 Gesture → Parameter Mapping
+
+Define spatial zones on the camera frame:
+
+```
+┌──────────────────────────────────┐
+│  DECK A ZONE    │  DECK B ZONE   │
+│  (left 40%)     │  (right 40%)   │
+│                 │                 │
+│  Volume: Y pos  │  Volume: Y pos  │
+│  EQ: pinch+rot  │  EQ: pinch+rot  │
+│                 │                 │
+├─────────────────┼─────────────────┤
+│         CROSSFADE ZONE            │
+│         (bottom 20%)              │
+│         X position = crossfade    │
+└──────────────────────────────────┘
+```
+
+**Gesture classifier — implement these in priority order:**
+
+**P0 — Must have for demo:**
+
+| # | Control | Detection Method | Param Output |
+|---|---------|-----------------|--------------|
+| 1 | **Crossfader** | Hand X in bottom zone | `crossfade: 0.0–1.0` |
+| 2 | **Volume (per deck)** | Hand Y in deck zone | `volumeA/B: 0.0–1.0` |
+| 3 | **Play/Pause** | Open palm → fist (fingertip-to-palm distance) | `playing: bool` |
+| 4 | **Filter Sweep** | Hand roll angle (atan2 of wrist→MCP vector) | `filterCutoff: 20–20000 Hz` |
+
+**P1 — Nice to have:**
+
+| # | Control | Detection Method | Param Output |
+|---|---------|-----------------|--------------|
+| 5 | **EQ (Low/Mid/High)** | Pinch (thumb↔index < 0.04) + rotation angle | `eqLow/Mid/High: -12–+12 dB` |
+| 6 | **Tempo** | Two-hand distance | `bpm: 80–180` |
+| 7 | **FX Send** | Upward swipe velocity + fingers spread | `fxWet: 0.0–1.0` |
+| 8 | **Track Select** | Point + flick L/R | `nextTrack / prevTrack` |
+| 9 | **Loop** | Circular finger motion (angular accumulation > 2π) | `loopToggle: bool` |
+
+**Smoothing — critical for usability:**
+
+```javascript
+class KalmanFilter1D {
+  constructor(processNoise = 0.01, measurementNoise = 0.1) {
+    this.Q = processNoise;
+    this.R = measurementNoise;
+    this.x = 0;  // state estimate
+    this.P = 1;  // error covariance
+  }
+  
+  update(measurement) {
+    // Predict
+    this.P += this.Q;
+    // Update
+    const K = this.P / (this.P + this.R);
+    this.x += K * (measurement - this.x);
+    this.P *= (1 - K);
+    return this.x;
+  }
+}
+
+// Apply per parameter:
+const crossfadeFilter = new KalmanFilter1D(0.005, 0.05); // low process noise = smooth
+const volumeFilter = new KalmanFilter1D(0.008, 0.05);
+
+// Dead zone helper:
+function applyDeadZone(value, center, zone) {
+  if (Math.abs(value - center) < zone) return center;
+  return value;
+}
+
+// Debounce for discrete gestures:
+function debounceGesture(detected, lastTriggerTime, cooldownMs = 500) {
+  if (detected && Date.now() - lastTriggerTime > cooldownMs) {
+    return { trigger: true, time: Date.now() };
+  }
+  return { trigger: false, time: lastTriggerTime };
+}
+```
+
+### 1.3 Audio Engine (Tone.js)
+
+```bash
+npm install tone
+```
+
+```javascript
+import * as Tone from 'tone';
+
+// Two decks
+const playerA = new Tone.Player("/tracks/track-a.mp3").toDestination();
+const playerB = new Tone.Player("/tracks/track-b.mp3").toDestination();
+
+// Crossfade
+const crossFade = new Tone.CrossFade().toDestination();
+playerA.connect(crossFade.a);
+playerB.connect(crossFade.b);
+
+// EQ per deck
+const eqA = new Tone.EQ3({ low: 0, mid: 0, high: 0 });
+const eqB = new Tone.EQ3({ low: 0, mid: 0, high: 0 });
+
+// Filter
+const filterA = new Tone.Filter(20000, "lowpass");
+const filterB = new Tone.Filter(20000, "lowpass");
+
+// FX
+const reverb = new Tone.Reverb(2).toDestination();
+const delay = new Tone.FeedbackDelay("8n", 0.4).toDestination();
+
+// Chain: Player → EQ → Filter → CrossFade → Destination
+playerA.chain(eqA, filterA, crossFade.a);
+playerB.chain(eqB, filterB, crossFade.b);
+
+// FFT analyzer for 3D viz
+const fft = new Tone.FFT(256);
+crossFade.connect(fft);
+
+// Apply gesture params every frame:
+function applyParams(params) {
+  crossFade.fade.value = params.crossfade;
+  playerA.volume.value = Tone.gainToDb(params.volumeA);
+  playerB.volume.value = Tone.gainToDb(params.volumeB);
+  filterA.frequency.value = params.filterCutoff;
+  // ... etc
+}
+
+// Export FFT data for viz:
+function getAudioData() {
+  return {
+    fftBands: reduceTo8Bands(fft.getValue()),
+    // beat detection via onset energy comparison
+  };
+}
+```
+
+### 1.4 Visual Feedback Overlay
+
+Draw detected gestures on the webcam canvas so the DJ gets feedback:
+
+```javascript
+function drawOverlay(ctx, landmarks, activeParams) {
+  // Draw hand skeleton
+  for (const hand of landmarks) {
+    drawConnectors(ctx, hand, HAND_CONNECTIONS, { color: '#ff6b35', lineWidth: 2 });
+    drawLandmarks(ctx, hand, { color: '#ff3250', lineWidth: 1, radius: 3 });
+  }
+  
+  // Draw zone labels
+  ctx.fillStyle = 'rgba(255,107,53,0.15)';
+  ctx.fillRect(0, 0, canvas.width * 0.4, canvas.height * 0.8);  // Deck A zone
+  ctx.fillRect(canvas.width * 0.6, 0, canvas.width * 0.4, canvas.height * 0.8);  // Deck B zone
+  
+  // Draw active parameter values
+  ctx.font = '14px monospace';
+  ctx.fillStyle = '#ff6b35';
+  ctx.fillText(`XFade: ${activeParams.crossfade.toFixed(2)}`, 10, canvas.height - 40);
+  ctx.fillText(`Vol A: ${activeParams.volumeA.toFixed(2)}`, 10, canvas.height - 20);
+}
+```
+
+---
+
+## Phase 2: 3D Visualization Interface (Hours 2–6, parallel with teammates)
+
+### 2.1 Shared Interface — Define This First
+
+```typescript
+// shared/types.ts — AGREE ON THIS WITH TEAMMATES IMMEDIATELY
+
+interface VizParams {
+  // Audio-driven (every frame, ~60fps)
+  fftBands: number[];          // 8 normalized frequency bands [0-1]
+  beatDetected: boolean;       // true on transient
+  bpm: number;                 // current BPM
+  waveform: Float32Array;      // 256 samples for mesh displacement
+  
+  // Audience-driven (every 2-5s from vote aggregation)
+  audienceEnergy: number;      // 0-1, smoothed
+  hypeSpikeActive: boolean;    // true when vote rate > 2x average
+  moodColor: [number, number, number]; // RGB 0-255
+  
+  // Agent-driven (every 15-30s from K2 Think)
+  visualTheme: 'cyber' | 'organic' | 'minimal' | 'chaos';
+  transitionSpeed: number;     // 0-1
+  sceneComplexity: number;     // 0-1
+  colorPalette: string[];      // hex colors
+  cameraMode: 'orbit' | 'fly' | 'static' | 'shake';
+}
+
+// Communication: use a shared state store or event emitter
+// Option A: Zustand store (if React)
+// Option B: Custom EventEmitter + WebSocket for cross-process
+// Option C: SharedArrayBuffer for audio data (fastest)
+```
+
+### 2.2 What Teammates Should Build
+
+Tell them to focus on these reactive behaviors:
+
+**Audio-reactive (highest priority):**
+- FFT bands → geometry scale/morph (low = big pulse, high = sparkle)
+- Beat detection → camera kick + bloom flash
+- Waveform → vertex displacement on a central mesh (sphere/torus)
+
+**Audience-reactive:**
+- `audienceEnergy` → particle count, orbit speed, post-processing intensity
+- `hypeSpikeActive` → "drop" animation (zoom + flash + geometry explode/reform)
+- `moodColor` → scene ambient color, emissive material tint
+
+**Agent-reactive:**
+- `visualTheme` → swap geometry/material/shader presets
+- `colorPalette` → lerp scene colors to new palette
+- `cameraMode` → switch camera behavior
+
+---
+
+## Phase 3: Voting System + Flowglad (Hours 4–7)
+
+### 3.1 Flowglad Setup
+
+```bash
+bun add @flowglad/nextjs  # or @flowglad/react + @flowglad/express
+```
+
+**Dashboard setup (do this in Flowglad UI):**
+1. Create product: "DJ Booth Vote Credits"
+2. Create price: usage-based, slug `dj_votes`, $0.50 per vote (or a credit pack: 10 votes for $3)
+3. Note your org ID for prize submission
+
+**Server setup:**
+
+```typescript
+// lib/flowglad.ts
+import { FlowgladServer } from '@flowglad/nextjs/server';
+
+export const flowglad = (customerExternalId: string) => {
+  return new FlowgladServer({
+    customerExternalId,
+    getCustomerDetails: async (externalId) => {
+      const user = await db.users.findOne({ id: externalId });
+      if (!user) throw new Error('User not found');
+      return { email: user.email, name: user.name };
+    },
+  });
+};
+```
+
+**Vote submission endpoint:**
+
+```typescript
+// api/vote/route.ts
+export async function POST(req) {
+  const { userId, voteType, voteValue } = await req.json();
+  
+  const billing = await flowglad(userId).getBilling();
+  const balance = billing.checkUsageBalance('dj_votes');
+  
+  if (balance.availableBalance <= 0) {
+    return Response.json({ error: 'No vote credits remaining' }, { status: 402 });
+  }
+  
+  // Record usage event
+  await flowglad(userId).createUsageEvent({
+    slug: 'dj_votes',
+    amount: 1,
+    metadata: { voteType, voteValue, timestamp: Date.now() },
+  });
+  
+  // Push to vote aggregation queue
+  await voteQueue.push({ voteType, voteValue, timestamp: Date.now() });
+  
+  return Response.json({ success: true, remainingVotes: balance.availableBalance - 1 });
+}
+```
+
+### 3.2 Vote Categories
+
+```typescript
+type VoteType = 
+  | 'energy_up'       // 🔥 More hype
+  | 'energy_down'     // ❄️ Chill out
+  | 'genre_switch'    // 🔄 Change genre (value: house|dnb|techno|lofi)
+  | 'drop_request'    // 💥 Build and drop
+  | 'viz_style'       // 🎨 Change visuals (value: cyber|organic|minimal|chaos)
+  | 'speed_up'        // ⚡ BPM +10
+  | 'speed_down';     // 🐌 BPM -10
+```
+
+### 3.3 Vote Aggregation
+
+```typescript
+// Run every 5 seconds
+function aggregateVotes(voteWindow: Vote[]): VoteAggregation {
+  const counts: Record<VoteType, number> = {};
+  for (const v of voteWindow) {
+    counts[v.voteType] = (counts[v.voteType] || 0) + 1;
+  }
+  
+  const total = voteWindow.length;
+  const voteRate = total / (WINDOW_SECONDS);  // votes per second
+  const avgVoteRate = getRunningAverage();
+  
+  return {
+    counts,
+    total,
+    voteRate,
+    isHypeSpike: voteRate > avgVoteRate * 2,
+    dominantVote: Object.entries(counts).sort((a, b) => b[1] - a[1])[0],
+    energyBias: ((counts.energy_up || 0) - (counts.energy_down || 0)) / Math.max(total, 1),
+    timestamp: Date.now(),
+  };
+}
+```
+
+### 3.4 Audience Mobile UI
+
+Simple mobile-friendly page with big tap targets:
+
+```
+┌─────────────────────────┐
+│   🎧 GESTURE DJ LIVE    │
+│   ━━━━━━━━━━━━━━━━━━    │
+│                         │
+│   Vote Credits: 7       │
+│                         │
+│  ┌─────────┐ ┌────────┐ │
+│  │  🔥     │ │  ❄️    │ │
+│  │ HYPE UP │ │ CHILL  │ │
+│  └─────────┘ └────────┘ │
+│  ┌─────────┐ ┌────────┐ │
+│  │  💥     │ │  🔄    │ │
+│  │  DROP!  │ │ GENRE  │ │
+│  └─────────┘ └────────┘ │
+│  ┌─────────┐ ┌────────┐ │
+│  │  ⚡     │ │  🎨    │ │
+│  │ FASTER  │ │ VISUALS│ │
+│  └─────────┘ └────────┘ │
+│                         │
+│  [ Buy 10 More Votes ]  │
+│                         │
+└─────────────────────────┘
+```
+
+Access via QR code displayed on the DJ booth screen.
+
+---
+
+## Phase 4: Agent System — Dedalus + K2 Think (Hours 6–10)
+
+### 4.1 Dedalus SDK Setup
+
+```bash
+pip install dedalus-labs
+```
+
+```python
+# agent/dj_agent.py
+import os
+import json
+from dedalus_labs import AsyncDedalus, DedalusRunner
+
+client = AsyncDedalus(api_key=os.environ["DEDALUS_API_KEY"])
+runner = DedalusRunner(client)
+```
+
+### 4.2 Agent System Prompt
+
+```python
+DJ_AGENT_SYSTEM_PROMPT = """
+You are the AI brain of an interactive DJ booth. Your job is to analyze crowd 
+sentiment from audience votes, current audio state, and set timeline to make 
+creative decisions about the music and visuals.
+
+You think like an experienced DJ:
+- You understand energy arcs (build → peak → release → build)
+- You don't blindly follow majority vote — you reason about timing and pacing
+- You anticipate what the crowd needs NEXT, not just what they're asking for now
+- You create moments of surprise and tension
+
+OUTPUT FORMAT: Respond with ONLY a JSON object:
+{
+  "reasoning": "Your chain-of-thought reasoning about the current state",
+  "actions": [
+    {"type": "adjust_energy", "value": 0.1},
+    {"type": "change_viz_theme", "value": "cyber"},
+    ...
+  ],
+  "confidence": 0.85,
+  "next_check_seconds": 20
+}
+
+AVAILABLE ACTIONS:
+- adjust_energy: delta from -0.3 to +0.3
+- switch_genre: "house" | "dnb" | "techno" | "lofi" | "ambient"
+- trigger_drop: { "buildup_bars": 4 | 8 | 16 }
+- change_viz_theme: "cyber" | "organic" | "minimal" | "chaos"
+- adjust_bpm: delta from -20 to +20
+- change_fx: { "type": "reverb" | "delay", "amount": 0.0-1.0 }
+- set_filter: { "type": "lowpass" | "highpass", "frequency": 100-18000 }
+- set_camera_mode: "orbit" | "fly" | "static" | "shake"
+- set_color_palette: ["#hex1", "#hex2", "#hex3"]
+"""
+```
+
+### 4.3 Agent Decision Loop
+
+```python
+import asyncio
+
+async def agent_loop():
+    decision_history = []
+    next_check = 15  # seconds
+    
+    while True:
+        await asyncio.sleep(next_check)
+        
+        # 1. Collect current state
+        vote_agg = await get_vote_aggregation()  # from vote service
+        audio_state = await get_audio_state()      # from audio engine
+        set_timeline = get_set_timeline()           # minutes into set
+        
+        # 2. Build context for K2 Think
+        context = f"""
+        CURRENT STATE (t={set_timeline}min into set):
+        
+        Vote Aggregation (last 60s):
+        - Total votes: {vote_agg['total']}
+        - Energy Up: {vote_agg['counts'].get('energy_up', 0)}
+        - Energy Down: {vote_agg['counts'].get('energy_down', 0)}
+        - Genre Switch requests: {vote_agg['counts'].get('genre_switch', 0)}
+        - Drop Requests: {vote_agg['counts'].get('drop_request', 0)}
+        - Viz Style requests: {vote_agg['counts'].get('viz_style', 0)}
+        - Vote rate: {vote_agg['voteRate']:.1f}/sec (avg: {vote_agg['avgRate']:.1f}/sec)
+        - Hype spike active: {vote_agg['isHypeSpike']}
+        
+        Audio State:
+        - Current genre: {audio_state['genre']}
+        - BPM: {audio_state['bpm']}
+        - Energy level: {audio_state['energy']:.2f}/1.0
+        - Current FX: {audio_state['activeFx']}
+        
+        Visual State:
+        - Theme: {audio_state['vizTheme']}
+        - Scene complexity: {audio_state['sceneComplexity']:.2f}
+        
+        Last 3 Decisions:
+        {json.dumps(decision_history[-3:], indent=2)}
+        
+        Reason about what the crowd needs right now and what actions to take.
+        """
+        
+        # 3. Send to K2 Think via Dedalus
+        response = await runner.run(
+            input=context,
+            model=["k2-think"],  # routes to K2 Think via Dedalus
+            mcp_servers=[],
+            tools=[],
+        )
+        
+        # 4. Parse decision
+        decision = json.loads(response.content)
+        decision_history.append({
+            "timestamp": set_timeline,
+            "reasoning": decision["reasoning"],
+            "actions": decision["actions"],
+        })
+        
+        # 5. Execute actions
+        for action in decision["actions"]:
+            await execute_action(action)
+        
+        # 6. Set next check interval (agent can adjust its own frequency)
+        next_check = decision.get("next_check_seconds", 15)
+        
+        # 7. Log for demo display
+        print(f"[DJ Agent] {decision['reasoning'][:100]}...")
+        print(f"[DJ Agent] Actions: {[a['type'] for a in decision['actions']]}")
+```
+
+### 4.4 Action Executor
+
+```python
+async def execute_action(action):
+    action_type = action["type"]
+    value = action.get("value")
+    
+    if action_type == "adjust_energy":
+        # Smooth energy adjustment over time
+        current = await get_current_energy()
+        target = max(0, min(1, current + value))
+        await audio_ws.send(json.dumps({
+            "type": "set_energy", 
+            "value": target,
+            "transition_ms": 3000,
+        }))
+        
+    elif action_type == "trigger_drop":
+        buildup = value.get("buildup_bars", 8)
+        await audio_ws.send(json.dumps({
+            "type": "trigger_drop",
+            "buildup_bars": buildup,
+        }))
+        # Also tell viz to prepare for drop animation
+        await viz_ws.send(json.dumps({
+            "type": "prepare_drop",
+            "buildup_bars": buildup,
+        }))
+        
+    elif action_type == "change_viz_theme":
+        await viz_ws.send(json.dumps({
+            "type": "set_theme",
+            "theme": value,
+            "transition_ms": 5000,
+        }))
+        
+    elif action_type == "set_color_palette":
+        await viz_ws.send(json.dumps({
+            "type": "set_palette",
+            "colors": value,
+        }))
+    
+    # ... handle other action types
+```
+
+### 4.5 Dedalus Auth Integration
+
+```python
+# For multi-tenant audience auth
+# Each audience member gets a session-scoped token
+
+from dedalus_labs import AsyncDedalus
+
+client = AsyncDedalus()
+
+# When audience member joins via QR code:
+async def create_audience_session(user_email: str, session_id: str):
+    # Dedalus Auth issues a scoped token
+    # This token authorizes: vote submission, billing check
+    # But NOT: audio control, admin functions
+    token = await client.auth.create_token(
+        user_id=user_email,
+        scope=["vote:submit", "billing:read"],
+        session=session_id,
+        ttl=7200,  # 2 hours
+    )
+    return token
+```
+
+---
+
+## Phase 5: Integration + Polish (Hours 8–12)
+
+### 5.1 Communication Layer
+
+Everything talks via WebSocket:
+
+```
+┌──────────┐  WS  ┌──────────┐  WS  ┌──────────┐
+│ CV Client│─────▶│  Server  │─────▶│ 3D Viz   │
+│ (browser)│      │ (Node/Py)│      │ (browser) │
+└──────────┘      └────┬─────┘      └──────────┘
+                       │
+              ┌────────┼────────┐
+              │        │        │
+         ┌────▼──┐ ┌───▼───┐ ┌─▼──────┐
+         │Flowglad│ │K2Think│ │Dedalus │
+         │ API   │ │via DD │ │  Auth  │
+         └───────┘ └───────┘ └────────┘
+```
+
+```javascript
+// server/ws.js
+const WebSocket = require('ws');
+
+const wss = new WebSocket.Server({ port: 8080 });
+const clients = { cv: null, viz: null, vote: null, agent: null };
+
+wss.on('connection', (ws, req) => {
+  const type = new URL(req.url, 'http://localhost').searchParams.get('type');
+  clients[type] = ws;
+  
+  ws.on('message', (data) => {
+    const msg = JSON.parse(data);
+    
+    // Route messages between systems
+    switch (msg.source) {
+      case 'cv':
+        // Forward gesture params to audio engine + viz
+        if (clients.viz) clients.viz.send(JSON.stringify(msg));
+        break;
+      case 'agent':
+        // Forward agent decisions to audio + viz
+        if (clients.viz) clients.viz.send(JSON.stringify(msg));
+        break;
+      case 'votes':
+        // Aggregate and forward to agent
+        voteAggregator.add(msg);
+        break;
+    }
+  });
+});
+```
+
+### 5.2 Demo Display Layout
+
+For the presentation screen, show everything at once:
+
+```
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│   ┌──────────────────┐  ┌───────────────────────┐  │
+│   │                  │  │                       │  │
+│   │   WEBCAM FEED    │  │   3D VISUALIZATION    │  │
+│   │   + gesture      │  │                       │  │
+│   │   overlay        │  │                       │  │
+│   │                  │  │                       │  │
+│   └──────────────────┘  └───────────────────────┘  │
+│                                                    │
+│   ┌──────────┐ ┌────────────┐ ┌─────────────────┐  │
+│   │ CURRENT  │ │ VOTE       │ │ AGENT LOG       │  │
+│   │ PARAMS   │ │ LIVE FEED  │ │ "Reasoning:     │  │
+│   │ Vol: 0.8 │ │ 🔥🔥💥🔥❄️ │ │  Energy rising, │  │
+│   │ XF: 0.5  │ │ Rate: 2/s  │ │  prepping drop" │  │
+│   │ BPM: 128 │ │ Hype: HIGH │ │ Action: drop    │  │
+│   └──────────┘ └────────────┘ └─────────────────┘  │
+│                                                    │
+│   [ QR CODE: vote.djbooth.app ]                    │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+### 5.3 Demo Script (Practice This)
+
+1. **Open** — "This is a DJ booth you control with your hands." Wave at camera, show gesture overlay.
+2. **Core demo** — Do crossfade, volume, filter sweep. Show audio reacting. (~60s)
+3. **Show votes** — "But the audience controls the vibe." Have a friend scan QR, cast votes. Show vote feed. (~30s)
+4. **Agent reasoning** — "And our AI DJ brain reasons about what to do next." Show agent log: "Energy has been climbing, 5 drop requests... triggering an 8-bar buildup." Music builds → drops. (~60s)
+5. **Tech stack callout** — "Powered by Dedalus for agent orchestration, K2 Think for reasoning, Flowglad for payments." (~15s)
+
+---
+
+## Flowglad Submission Checklist
+
+- [ ] Complete at least one test mode payment
+- [ ] Note org ID: `________________`
+- [ ] Verify `useBilling()` hook works in frontend
+- [ ] Verify `createUsageEvent()` records votes
+- [ ] Screenshot of Flowglad dashboard showing test transactions
+
+## Dedalus Submission Checklist
+
+- [ ] Agent runs via `DedalusRunner.run()`
+- [ ] Auth tokens scoped per audience session
+- [ ] Show Dedalus logs/dashboard in demo
+- [ ] Document the agent workflow in README
+
+## K2 Think Submission Checklist
+
+- [ ] K2 Think is the core reasoning engine (not a wrapper)
+- [ ] Show chain-of-thought reasoning in demo UI
+- [ ] Demonstrate non-trivial decisions (conflict resolution, pacing, anticipation)
+- [ ] Highlight that reasoning capability is WHY this works (not just vote counting)
+
+---
+
+## Fallback Plan
+
+If time runs short, prioritize in this order:
+
+1. **Minimum viable demo:** CV gestures → Tone.js audio (no 3D, no agents). Still impressive.
+2. **Add 3D viz:** Even if only audio-reactive (no agent control). Adds spectacle.
+3. **Add voting:** Even without agent reasoning, show votes → direct parameter changes.
+4. **Add agent:** Full system with K2 Think reasoning. This is the ideal.
+
+Each layer is independently demoable. Don't try to build everything at once — get each layer working, then integrate.
+
+---
+
+## Tech Stack Summary
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Hand tracking | MediaPipe Hands (browser) | 21 landmarks/hand, 30fps |
+| Audio engine | Tone.js / Web Audio API | Mixing, FX, FFT analysis |
+| 3D visualization | Three.js / React Three Fiber | Audio + audience reactive viz |
+| Payments | Flowglad (@flowglad/nextjs) | Micropayment voting |
+| Agent orchestration | Dedalus Labs SDK (Python) | Model routing, MCP, auth |
+| Reasoning model | K2 Think (70B, via Dedalus) | Crowd sentiment reasoning |
+| Communication | WebSocket | Real-time param streaming |
+| Frontend | Next.js / React | Voting UI, demo dashboard |
