@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Gesture DJ Booth</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260207b">
 </head>
 <body>
     <!-- Camera feed -->
@@ -44,7 +44,36 @@
         <div class="hint" id="hint-fist">Fist = play/pause</div>
         <div class="hint" id="hint-volume">Pinch + lift = selected stem volume</div>
         <div class="hint" id="hint-wave">Wave = next track</div>
+        <div class="hint">Other hand: 1/2/3 fingers = FX 1/2/3</div>
         <div class="hint-status" id="gesture-status">Show your hand</div>
+    </div>
+    <div id="mixer-strip">
+        <div class="mixer-title">LIVE STEM MIXER</div>
+        <div class="mixer-knobs">
+            <div class="mix-knob-card selected" id="mix-card-1">
+                <div class="mix-knob" id="mix-knob-1"><span>1</span></div>
+                <div class="mix-knob-val" id="mix-val-1">0%</div>
+            </div>
+            <div class="mix-knob-card" id="mix-card-2">
+                <div class="mix-knob" id="mix-knob-2"><span>2</span></div>
+                <div class="mix-knob-val" id="mix-val-2">0%</div>
+            </div>
+            <div class="mix-knob-card" id="mix-card-3">
+                <div class="mix-knob" id="mix-knob-3"><span>3</span></div>
+                <div class="mix-knob-val" id="mix-val-3">0%</div>
+            </div>
+        </div>
+        <div class="track-board">
+            <div class="track-board-title">TRACK LIST</div>
+            <div class="track-row active" id="track-row-0">
+                <span class="track-row-name">TRACK1</span>
+                <span class="track-row-state">LIVE</span>
+            </div>
+            <div class="track-row" id="track-row-1">
+                <span class="track-row-name">TRACK2</span>
+                <span class="track-row-state">READY</span>
+            </div>
+        </div>
     </div>
 
     <!-- Start overlay -->
@@ -66,6 +95,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-    <script type="module" src="/static/js/main.js"></script>
+    <script type="module" src="/static/js/main.js?v=20260207b"></script>
 </body>
 </html>

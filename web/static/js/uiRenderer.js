@@ -27,6 +27,25 @@ export class UIRenderer {
             hintVolume: document.getElementById('hint-volume'),
             hintWave: document.getElementById('hint-wave'),
             hintStatus: document.getElementById('gesture-status'),
+            mixKnobs: [
+                document.getElementById('mix-knob-1'),
+                document.getElementById('mix-knob-2'),
+                document.getElementById('mix-knob-3'),
+            ],
+            mixCards: [
+                document.getElementById('mix-card-1'),
+                document.getElementById('mix-card-2'),
+                document.getElementById('mix-card-3'),
+            ],
+            mixVals: [
+                document.getElementById('mix-val-1'),
+                document.getElementById('mix-val-2'),
+                document.getElementById('mix-val-3'),
+            ],
+            trackRows: [
+                document.getElementById('track-row-0'),
+                document.getElementById('track-row-1'),
+            ],
         };
     }
 
@@ -57,11 +76,6 @@ export class UIRenderer {
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Debug: draw border to confirm canvas is visible
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
-
         // Draw hands
         for (const hand of hands) {
             this._drawHand(hand);
@@ -80,7 +94,8 @@ export class UIRenderer {
 
         // Update DJ booth display
         this.statusMessage = this._updateDisplay(gestureState, audioState);
-        this._drawStatusMessage(this.statusMessage);
+        const compactStatus = this.statusMessage.startsWith('Selected stem');
+        this._drawStatusMessage(this.statusMessage, compactStatus);
     }
 
     _drawHand(hand) {
@@ -130,19 +145,20 @@ export class UIRenderer {
         ctx.fillText('FINGERS', 30, 115);
     }
 
-    _drawStatusMessage(message) {
+    _drawStatusMessage(message, compact = false) {
         if (!message) return;
 
         const { ctx, canvas } = this;
         const x = canvas.width / 2;
         const y = canvas.height - 90;
+        const fontSize = compact ? 16 : 20;
 
-        ctx.font = '700 24px Arial';
+        ctx.font = `700 ${fontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        const width = Math.min(canvas.width - 40, Math.max(220, message.length * 13));
-        const height = 42;
+        const width = Math.min(canvas.width - 40, Math.max(220, message.length * (compact ? 9 : 11)));
+        const height = compact ? 34 : 40;
         const left = x - width / 2;
         const top = y - height / 2;
 
@@ -199,9 +215,35 @@ export class UIRenderer {
             const isSelected = audioState.selectedStem === i;
             const isPlaying = isActiveLayer && audioState.isPlaying;
 
+            const knobAngle = `${Math.round(stemVolume * 360)}deg`;
+            dot.style.setProperty('--knob-angle', knobAngle);
+
             dot.classList.toggle('active', isActiveLayer);
             dot.classList.toggle('selected', isSelected);
             dot.classList.toggle('playing', isPlaying);
+        }
+
+        // Mixer knobs + track board
+        for (let i = 0; i < this.elements.mixKnobs.length; i++) {
+            const knob = this.elements.mixKnobs[i];
+            const card = this.elements.mixCards[i];
+            const val = this.elements.mixVals[i];
+            const stemVolume = (audioState.stemVolumes && audioState.stemVolumes[i]) || 0;
+            if (knob) {
+                knob.style.setProperty('--mix-angle', `${Math.round(stemVolume * 360)}deg`);
+            }
+            if (val) {
+                val.textContent = `${Math.round(stemVolume * 100)}%`;
+            }
+            if (card) {
+                card.classList.toggle('selected', audioState.selectedStem === i);
+            }
+        }
+
+        for (let i = 0; i < this.elements.trackRows.length; i++) {
+            const row = this.elements.trackRows[i];
+            if (!row) continue;
+            row.classList.toggle('active', audioState.trackIndex === i);
         }
 
         // Gesture hints + status
@@ -220,6 +262,10 @@ export class UIRenderer {
             if (this.elements.hintStatus) {
                 if (!hasHand) {
                     statusMessage = 'Show your hand';
+                } else if (gestureState.effectTrigger > 0) {
+                    statusMessage = `FX ${gestureState.effectTrigger}`;
+                } else if (audioState.isTrackLoading) {
+                    statusMessage = 'Loading track...';
                 } else if (gestureState.playPause) {
                     statusMessage = audioState.isPlaying ? 'Playing' : 'Paused';
                 } else if (gestureState.trackSwitch) {

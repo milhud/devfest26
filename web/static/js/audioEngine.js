@@ -1,6 +1,6 @@
 /**
  * Audio engine with stem-based playback.
- * Each track folder has 5 stems (stem1-5.mp3/wav).
+ * Each track folder has N stems (stem1..stemN.mp3/wav).
  * All stems run in sync; selection targets a layer for volume control.
  */
 
@@ -17,6 +17,8 @@ export class AudioEngine {
         this.isPlaying = false;
         this.isInitialized = false;
         this.isStarted = false;
+        this.isTrackLoading = false;
+        this.effects = []; // Array of Tone.Player for one-shot FX
     }
 
     async initialize() {
@@ -28,6 +30,7 @@ export class AudioEngine {
 
         // Load first track's stems
         await this._loadTrack(0);
+        await this._loadEffects();
 
         // Keep stems running in sync from the start
         this.isPlaying = true;
@@ -55,7 +58,7 @@ export class AudioEngine {
 
         console.log(`Loading track: ${folder}`);
 
-        // Load all 5 stems
+        // Load all configured stems
         for (let i = 1; i <= CONFIG.STEMS_PER_TRACK; i++) {
             const stem = await this._loadStem(folder, i);
             this.stems.push(stem);
@@ -76,41 +79,76 @@ export class AudioEngine {
         ];
 
         for (const path of paths) {
-            try {
-                const response = await fetch(path, { method: 'HEAD' });
-                if (response.ok) {
-                    const gain = new Tone.Gain(0);
-                    const player = new Tone.Player({
-                        url: path,
-                        loop: true,
-                        onload: () => console.log(`  Loaded stem${stemNumber}`),
-                        onerror: (e) => console.error(`  Error loading stem${stemNumber}:`, e),
-                    });
-                    player.connect(gain);
-                    gain.connect(this.masterVolume);
-
-                    // Wait for load with timeout
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => resolve(), 10000);  // 10s timeout
-                        const check = () => {
-                            if (player.loaded) {
-                                clearTimeout(timeout);
-                                resolve();
-                            } else {
-                                setTimeout(check, 100);
-                            }
-                        };
-                        check();
-                    });
-
-                    return { player, gain };
-                }
-            } catch (e) {
-                console.log(`  stem${stemNumber}: ${path} not found`);
+            const player = await this._createPlayer(path, { loop: true, timeoutMs: 10000 });
+            if (player) {
+                const gain = new Tone.Gain(0);
+                player.connect(gain);
+                gain.connect(this.masterVolume);
+                console.log(`  Loaded stem${stemNumber} from ${path}`);
+                return { player, gain };
             }
         }
 
+        console.log(`  stem${stemNumber}: no playable file found`);
         return null;
+    }
+
+    async _loadEffects() {
+        this.effects = [];
+        for (let i = 1; i <= CONFIG.EFFECTS_PER_HAND; i++) {
+            const effect = await this._loadEffect(i);
+            this.effects.push(effect);
+        }
+        console.log(`Loaded ${this.effects.filter(e => e !== null).length} effects`);
+    }
+
+    async _loadEffect(effectNumber) {
+        const paths = [
+            `/music/effects/effect${effectNumber}.mp3`,
+            `/music/effects/effect${effectNumber}.wav`,
+        ];
+
+        for (const path of paths) {
+            const player = await this._createPlayer(path, { loop: false, timeoutMs: 5000 });
+            if (player) {
+                player.toDestination();
+                console.log(`  Loaded effect${effectNumber} from ${path}`);
+                return player;
+            }
+        }
+
+        console.log(`  effect${effectNumber}: no playable file found`);
+        return null;
+    }
+
+    async _createPlayer(path, options) {
+        let done = false;
+        let hadError = false;
+
+        const player = new Tone.Player({
+            url: path,
+            loop: !!options.loop,
+            onload: () => { done = true; },
+            onerror: () => {
+                hadError = true;
+                done = true;
+            },
+        });
+
+        const timeoutAt = Date.now() + (options.timeoutMs || 5000);
+        while (!done && Date.now() < timeoutAt) {
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            if (player.loaded) {
+                done = true;
+            }
+        }
+
+        if (!player.loaded || hadError) {
+            try { player.dispose(); } catch (e) {}
+            return null;
+        }
+
+        return player;
     }
 
     _startAllStems() {
@@ -180,31 +218,55 @@ export class AudioEngine {
         this._applyStemGains();
     }
 
+    playEffect(effectIndex) {
+        if (effectIndex < 0 || effectIndex >= this.effects.length) return false;
+        const effect = this.effects[effectIndex];
+        if (!effect) return false;
+
+        try {
+            if (effect.state === 'started') {
+                effect.stop();
+            }
+            effect.start();
+            return true;
+        } catch (e) {
+            console.error('Effect play error:', e);
+            return false;
+        }
+    }
+
     async nextTrack() {
+        if (this.isTrackLoading) return;
+        this.isTrackLoading = true;
+
         const wasPlaying = this.isPlaying;
         const wasStem = this.selectedStem;
         const wasStemVolumes = [...this.stemVolumes];
 
-        // Stop current
-        this.stop();
+        try {
+            // Stop current
+            this.stop();
 
-        // Load next track
-        let nextIndex = this.currentTrackIndex + 1;
-        if (nextIndex >= CONFIG.TRACK_FOLDERS.length) nextIndex = 0;
+            // Load next track
+            let nextIndex = this.currentTrackIndex + 1;
+            if (nextIndex >= CONFIG.TRACK_FOLDERS.length) nextIndex = 0;
 
-        await this._loadTrack(nextIndex);
+            await this._loadTrack(nextIndex);
 
-        // Restore layer state and transport state
-        this.selectedStem = wasStem;
-        for (let i = 0; i < this.stemVolumes.length; i++) {
-            if (this.stems[i]) {
-                this.stemVolumes[i] = wasStemVolumes[i] ?? 0;
+            // Restore layer state and transport state
+            this.selectedStem = wasStem;
+            for (let i = 0; i < this.stemVolumes.length; i++) {
+                if (this.stems[i]) {
+                    this.stemVolumes[i] = wasStemVolumes[i] ?? 0;
+                }
             }
-        }
-        if (wasPlaying) {
-            this.play();
-        } else {
-            this._applyStemGains();
+            if (wasPlaying) {
+                this.play();
+            } else {
+                this._applyStemGains();
+            }
+        } finally {
+            this.isTrackLoading = false;
         }
     }
 
@@ -215,6 +277,7 @@ export class AudioEngine {
             selectedStem: this.selectedStem,
             stemVolumes: [...this.stemVolumes],
             isPlaying: this.isPlaying,
+            isTrackLoading: this.isTrackLoading,
             volume: this.selectedStem >= 0 ? this.stemVolumes[this.selectedStem] || 0 : 0,
             stemCount: this.stems.filter(s => s !== null).length,
             availableStems: this.stems.map(s => s !== null),

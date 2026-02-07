@@ -81,6 +81,126 @@ body {
     letter-spacing: 0.3px;
 }
 
+.mixer-title,
+.track-board-title {
+    font-size: 10px;
+    letter-spacing: 1.8px;
+    color: #61f7ff;
+    text-transform: uppercase;
+}
+
+#mixer-strip {
+    background:
+        linear-gradient(180deg, rgba(6, 10, 16, 0.95), rgba(2, 5, 9, 0.95)),
+        repeating-linear-gradient(90deg, rgba(97, 247, 255, 0.06) 0 1px, transparent 1px 16px);
+    border-top: 1px solid rgba(97, 247, 255, 0.25);
+    padding: 8px 14px 10px;
+    display: grid;
+    grid-template-columns: 1fr 210px;
+    gap: 14px;
+    align-items: center;
+}
+
+.mixer-knobs {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.mix-knob-card {
+    min-width: 72px;
+    text-align: center;
+    padding: 4px 6px;
+    border: 1px solid rgba(97, 247, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.mix-knob-card.selected {
+    border-color: rgba(255, 107, 53, 0.8);
+    box-shadow: 0 0 16px rgba(255, 107, 53, 0.28);
+}
+
+.mix-knob {
+    --mix-angle: 0deg;
+    position: relative;
+    width: 42px;
+    height: 42px;
+    margin: 3px auto 4px;
+    border-radius: 50%;
+    border: 2px solid rgba(97, 247, 255, 0.6);
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.45) inset,
+        0 0 12px rgba(97, 247, 255, 0.22);
+    background:
+        radial-gradient(circle at center, #091018 44%, transparent 46%),
+        conic-gradient(
+            #61f7ff 0deg,
+            #61f7ff var(--mix-angle),
+            #132635 var(--mix-angle),
+            #132635 360deg
+        );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mix-knob::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 2px;
+    height: 12px;
+    background: #ff8f66;
+    box-shadow: 0 0 6px rgba(255, 143, 102, 0.7);
+    transform-origin: 50% 18px;
+    transform: translateX(-50%) rotate(calc(var(--mix-angle) - 90deg));
+}
+
+.mix-knob span {
+    font-size: 11px;
+    font-weight: 700;
+    color: #d9fbff;
+    text-shadow: 0 0 6px rgba(97, 247, 255, 0.4);
+}
+
+.mix-knob-val {
+    font-size: 11px;
+    color: #9ed9df;
+    font-weight: 700;
+}
+
+.track-board {
+    border: 1px solid rgba(97, 247, 255, 0.25);
+    border-radius: 8px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.track-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #7fa5af;
+    border-top: 1px solid rgba(97, 247, 255, 0.1);
+    padding: 5px 2px;
+}
+
+.track-row:first-of-type {
+    border-top: none;
+}
+
+.track-row.active {
+    color: #ffffff;
+}
+
+.track-row.active .track-row-state {
+    color: #00ff88;
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
 .dj-info {
     display: flex;
     gap: 20px;
@@ -107,6 +227,10 @@ body {
     color: #ff6b35;
 }
 
+#stem-number {
+    font-size: 12px;
+}
+
 #play-status.playing {
     color: #00ff88;
 }
@@ -118,10 +242,13 @@ body {
 }
 
 .stem-dot {
+    --knob-angle: 0deg;
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: #222;
+    background:
+        radial-gradient(circle at center, #0e0e14 52%, transparent 54%),
+        conic-gradient(#ff6b35 var(--knob-angle), #222 0deg);
     border: 2px solid #444;
     display: flex;
     align-items: center;
@@ -133,7 +260,6 @@ body {
 }
 
 .stem-dot.active {
-    background: linear-gradient(145deg, #ff6b35, #ff3250);
     border-color: #ff6b35;
     color: #fff;
     box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
@@ -259,5 +385,25 @@ body {
         width: 100%;
         margin-left: 0;
         margin-top: 2px;
+    }
+
+    #mixer-strip {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 8px 10px 9px;
+    }
+
+    .mixer-knobs {
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .mix-knob-card {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .track-board {
+        width: 100%;
     }
 }

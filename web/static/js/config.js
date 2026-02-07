@@ -26,6 +26,7 @@ export const CONFIG = {
     STEM_SELECT_LOCK_MS: 4000,
     PLAY_PAUSE_DEBOUNCE_MS: 300,
     TRACK_SWITCH_DEBOUNCE_MS: 600,
+    EFFECT_TRIGGER_DEBOUNCE_MS: 350,
 
     // Control hand (single hand mode)
     CONTROL_HAND: 'Right',
@@ -37,6 +38,7 @@ export const CONFIG = {
 
     DEFAULT_VOLUME: 0,
     SELECTED_STEM_DEFAULT_VOLUME: 0.35,
+    EFFECTS_PER_HAND: 3,
 
     // MediaPipe model
     MODEL_PATH: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',

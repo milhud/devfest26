@@ -99,21 +99,19 @@ export class HandTracker {
                 rollAngle,
             });
         }
-        // Single-hand control mode: lock control to one hand label.
+        // Dual-hand mode: first hand is control hand, second hand is effects hand.
         if (hands.length === 0) return hands;
 
         if (!this.controlHandLabel) {
             const preferred = hands.find(h => h.handedness === CONFIG.CONTROL_HAND);
             const chosen = preferred || hands[0];
             this.controlHandLabel = chosen.handedness;
-            return [chosen];
         }
 
-        const tracked = hands.find(h => h.handedness === this.controlHandLabel);
-        if (tracked) return [tracked];
+        const controlHand = hands.find(h => h.handedness === this.controlHandLabel) || hands[0];
+        const otherHands = hands.filter(h => h !== controlHand);
 
-        // Fallback if hand label temporarily drops.
-        return [hands[0]];
+        return [controlHand, ...otherHands];
     }
 
     _detectHandState(landmarks, palmCenter) {
