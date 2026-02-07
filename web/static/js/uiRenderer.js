@@ -1,5 +1,5 @@
 /**
- * UI Renderer - updates visual DJ controls and draws hand overlay.
+ * UI Renderer - updates visual controls and draws hand overlay.
  */
 
 import { CONFIG } from './config.js';
@@ -9,81 +9,78 @@ export class UIRenderer {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.video = video;
+        this.statusMessage = 'Show your hand';
 
         // DOM elements
         this.elements = {
-            handStatus: document.getElementById('hand-status'),
-            vinylA: document.getElementById('vinyl-a'),
-            vinylB: document.getElementById('vinyl-b'),
-            playA: document.getElementById('play-a'),
-            playB: document.getElementById('play-b'),
-            knobVolA: document.getElementById('knob-vol-a'),
-            knobVolB: document.getElementById('knob-vol-b'),
-            knobFilter: document.getElementById('knob-filter'),
-            volAValue: document.getElementById('vol-a-value'),
-            volBValue: document.getElementById('vol-b-value'),
-            filterValue: document.getElementById('filter-value'),
-            crossfader: document.getElementById('crossfader'),
-            trackLabelA: document.getElementById('track-label-a'),
-            trackLabelB: document.getElementById('track-label-b'),
-            trackTypeA: document.getElementById('track-type-a'),
-            trackTypeB: document.getElementById('track-type-b'),
-            fx1: document.getElementById('fx-1'),
-            fx2: document.getElementById('fx-2'),
-            fx3: document.getElementById('fx-3'),
+            trackName: document.getElementById('track-name'),
+            stemNumber: document.getElementById('stem-number'),
+            playStatus: document.getElementById('play-status'),
+            volumeValue: document.getElementById('volume-value'),
+            stemDots: [
+                document.getElementById('stem-1'),
+                document.getElementById('stem-2'),
+                document.getElementById('stem-3'),
+            ],
+            hintStem: document.getElementById('hint-stem'),
+            hintFist: document.getElementById('hint-fist'),
+            hintVolume: document.getElementById('hint-volume'),
+            hintWave: document.getElementById('hint-wave'),
+            hintStatus: document.getElementById('gesture-status'),
         };
-
-        this.effectFlashTimers = [null, null, null];
     }
 
     resize() {
         if (this.video.videoWidth && this.video.videoHeight) {
             this.canvas.width = this.video.videoWidth;
             this.canvas.height = this.video.videoHeight;
+            console.log(`Canvas resized to ${this.canvas.width}x${this.canvas.height}`);
+        } else {
+            // Fallback: use client dimensions
+            const rect = this.video.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                console.log(`Canvas fallback to ${this.canvas.width}x${this.canvas.height}`);
+            }
         }
     }
 
-    render(hands, gestureState, deckInfo) {
+    render(hands, gestureState, audioState) {
         const { ctx, canvas } = this;
+
+        // Ensure canvas is sized
+        if (canvas.width === 0 || canvas.height === 0) {
+            this.resize();
+        }
 
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Update status
-        this._updateHandStatus(hands, gestureState);
+        // Debug: draw border to confirm canvas is visible
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
 
         // Draw hands
         for (const hand of hands) {
             this._drawHand(hand);
         }
 
-        // Update DJ controls
-        this._updateDeckControls(deckInfo);
-        this._updateMixer(gestureState, deckInfo);
-
-        // Flash effect button if triggered
-        if (gestureState?.effectTrigger >= 0) {
-            this._flashEffect(gestureState.effectTrigger);
-        }
-    }
-
-    _updateHandStatus(hands, gestureState) {
-        const status = this.elements.handStatus;
-        if (!status) return;
-
-        if (hands.length === 0) {
-            status.textContent = 'Show your hands to control';
-            status.style.color = '#888';
+        // Draw finger count indicator
+        if (gestureState && gestureState.handDetected) {
+            this._drawFingerCount(gestureState.fingerCount);
         } else {
-            const hand = hands[0];
-            let gesture = 'tracking';
-            if (hand.isFist) gesture = 'FIST (play/pause)';
-            else if (hand.isPinching) gesture = 'PINCH (adjusting)';
-            else if (hand.isOpenPalm) gesture = 'OPEN';
-
-            status.textContent = `${hands.length} hand${hands.length > 1 ? 's' : ''}: ${gesture}`;
-            status.style.color = '#00ff88';
+            // Show "no hand" message
+            ctx.font = 'bold 24px Arial';
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'center';
+            ctx.fillText('Show your hand', canvas.width / 2, 50);
         }
+
+        // Update DJ booth display
+        this.statusMessage = this._updateDisplay(gestureState, audioState);
+        this._drawStatusMessage(this.statusMessage);
     }
 
     _drawHand(hand) {
@@ -91,7 +88,7 @@ export class UIRenderer {
         const landmarks = hand.landmarks;
 
         // Draw connections
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
         ctx.lineWidth = 2;
 
         for (const [start, end] of CONFIG.HAND_CONNECTIONS) {
@@ -109,139 +106,143 @@ export class UIRenderer {
             const x = lm.x * canvas.width;
             const y = lm.y * canvas.height;
 
-            const isFingertip = [4, 8, 12, 16, 20].includes(i);
+            const isFingertip = CONFIG.FINGERTIPS.includes(i);
             ctx.beginPath();
-            ctx.arc(x, y, isFingertip ? 5 : 3, 0, Math.PI * 2);
+            ctx.arc(x, y, isFingertip ? 6 : 3, 0, Math.PI * 2);
             ctx.fillStyle = isFingertip ? '#ff6b35' : '#00ffff';
             ctx.fill();
         }
-
-        // Palm center with state indicator
-        ctx.beginPath();
-        ctx.arc(
-            hand.palmCenter.x * canvas.width,
-            hand.palmCenter.y * canvas.height,
-            12, 0, Math.PI * 2
-        );
-        ctx.strokeStyle = hand.isFist ? '#ff3250' : hand.isPinching ? '#00ff88' : 'rgba(255,255,255,0.5)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // State label
-        if (hand.isFist) {
-            ctx.font = 'bold 14px Arial';
-            ctx.fillStyle = '#ff3250';
-            ctx.textAlign = 'center';
-            ctx.fillText('FIST', hand.palmCenter.x * canvas.width, hand.palmCenter.y * canvas.height - 20);
-        } else if (hand.isPinching) {
-            ctx.font = 'bold 14px Arial';
-            ctx.fillStyle = '#00ff88';
-            ctx.textAlign = 'center';
-            ctx.fillText('PINCH', hand.palmCenter.x * canvas.width, hand.palmCenter.y * canvas.height - 20);
-        }
     }
 
-    _updateDeckControls(deckInfo) {
-        // Deck A
-        if (deckInfo.left) {
-            const info = deckInfo.left;
+    _drawFingerCount(count) {
+        const { ctx, canvas } = this;
 
-            if (this.elements.volAValue) {
-                this.elements.volAValue.textContent = `${Math.round(info.volume * 100)}%`;
-            }
+        // Draw big finger count in top-left
+        ctx.font = 'bold 80px Arial';
+        ctx.fillStyle = count === 0 ? '#ff3250' : '#00ff88';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(count.toString(), 30, 30);
 
-            if (this.elements.knobVolA) {
-                const rotation = (info.volume - 0.5) * 270;
-                const indicator = this.elements.knobVolA.querySelector('.knob-indicator');
-                if (indicator) indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
-            }
-
-            if (this.elements.playA) {
-                this.elements.playA.classList.toggle('playing', info.isPlaying);
-                this.elements.playA.textContent = info.isPlaying ? 'STOP' : 'PLAY';
-            }
-
-            if (this.elements.vinylA) {
-                this.elements.vinylA.classList.toggle('playing', info.isPlaying);
-            }
-
-            if (this.elements.trackLabelA) {
-                this.elements.trackLabelA.textContent = info.trackName.toUpperCase();
-            }
-
-            if (this.elements.trackTypeA) {
-                this.elements.trackTypeA.textContent = info.trackType.toUpperCase();
-            }
-        }
-
-        // Deck B
-        if (deckInfo.right) {
-            const info = deckInfo.right;
-
-            if (this.elements.volBValue) {
-                this.elements.volBValue.textContent = `${Math.round(info.volume * 100)}%`;
-            }
-
-            if (this.elements.knobVolB) {
-                const rotation = (info.volume - 0.5) * 270;
-                const indicator = this.elements.knobVolB.querySelector('.knob-indicator');
-                if (indicator) indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
-            }
-
-            if (this.elements.playB) {
-                this.elements.playB.classList.toggle('playing', info.isPlaying);
-                this.elements.playB.textContent = info.isPlaying ? 'STOP' : 'PLAY';
-            }
-
-            if (this.elements.vinylB) {
-                this.elements.vinylB.classList.toggle('playing', info.isPlaying);
-            }
-
-            if (this.elements.trackLabelB) {
-                this.elements.trackLabelB.textContent = info.trackName.toUpperCase();
-            }
-
-            if (this.elements.trackTypeB) {
-                this.elements.trackTypeB.textContent = info.trackType.toUpperCase();
-            }
-        }
+        // Label
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#888';
+        ctx.fillText('FINGERS', 30, 115);
     }
 
-    _updateMixer(gestureState, deckInfo) {
-        // Crossfader
-        if (this.elements.crossfader && gestureState) {
-            const percent = gestureState.crossfader * 100;
-            this.elements.crossfader.style.left = `${percent}%`;
-        }
+    _drawStatusMessage(message) {
+        if (!message) return;
 
-        // Filter
-        if (deckInfo.left && this.elements.filterValue) {
-            const freq = deckInfo.left.filterFreq;
-            this.elements.filterValue.textContent = freq >= 1000
-                ? `${(freq / 1000).toFixed(1)}kHz`
-                : `${Math.round(freq)}Hz`;
-        }
+        const { ctx, canvas } = this;
+        const x = canvas.width / 2;
+        const y = canvas.height - 90;
 
-        if (this.elements.knobFilter && gestureState) {
-            const rotation = (gestureState.filterSweep - 0.5) * 270;
-            const indicator = this.elements.knobFilter.querySelector('.knob-indicator');
-            if (indicator) indicator.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
-        }
+        ctx.font = '700 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const width = Math.min(canvas.width - 40, Math.max(220, message.length * 13));
+        const height = 42;
+        const left = x - width / 2;
+        const top = y - height / 2;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(left, top, width, height);
+
+        ctx.strokeStyle = 'rgba(255, 107, 53, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(left, top, width, height);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(message, x, y);
     }
 
-    _flashEffect(index) {
-        const btns = [this.elements.fx1, this.elements.fx2, this.elements.fx3];
-        const btn = btns[index];
-        if (!btn) return;
+    _updateDisplay(gestureState, audioState) {
+        let statusMessage = 'Show your hand';
+        if (!audioState) return statusMessage;
 
-        // Clear previous timer
-        if (this.effectFlashTimers[index]) {
-            clearTimeout(this.effectFlashTimers[index]);
+        // Track name
+        if (this.elements.trackName) {
+            this.elements.trackName.textContent = audioState.trackFolder.toUpperCase();
         }
 
-        btn.classList.add('active');
-        this.effectFlashTimers[index] = setTimeout(() => {
-            btn.classList.remove('active');
-        }, 200);
+        // Stem number
+        if (this.elements.stemNumber) {
+            this.elements.stemNumber.textContent = audioState.selectedStem >= 0
+                ? `${audioState.selectedStem + 1}`
+                : '--';
+        }
+
+        // Play status
+        if (this.elements.playStatus) {
+            if (audioState.isPlaying) {
+                this.elements.playStatus.textContent = 'PLAYING';
+                this.elements.playStatus.classList.add('playing');
+            } else {
+                this.elements.playStatus.textContent = 'PAUSED';
+                this.elements.playStatus.classList.remove('playing');
+            }
+        }
+
+        // Volume
+        if (this.elements.volumeValue) {
+            this.elements.volumeValue.textContent = `${Math.round(audioState.volume * 100)}%`;
+        }
+
+        // Stem dots
+        for (let i = 0; i < this.elements.stemDots.length; i++) {
+            const dot = this.elements.stemDots[i];
+            if (!dot) continue;
+
+            const stemVolume = (audioState.stemVolumes && audioState.stemVolumes[i]) || 0;
+            const isActiveLayer = stemVolume > 0.02;
+            const isSelected = audioState.selectedStem === i;
+            const isPlaying = isActiveLayer && audioState.isPlaying;
+
+            dot.classList.toggle('active', isActiveLayer);
+            dot.classList.toggle('selected', isSelected);
+            dot.classList.toggle('playing', isPlaying);
+        }
+
+        // Gesture hints + status
+        if (gestureState) {
+            const hasHand = gestureState.handDetected;
+            const isSelecting = hasHand && gestureState.fingerCount >= 1 && gestureState.fingerCount <= CONFIG.STEMS_PER_TRACK;
+            const isFist = hasHand && gestureState.isFist;
+            const isWave = gestureState.trackSwitch;
+            const isPinching = !!gestureState.isPinching;
+
+            if (this.elements.hintStem) this.elements.hintStem.classList.toggle('active', isSelecting);
+            if (this.elements.hintFist) this.elements.hintFist.classList.toggle('active', isFist);
+            if (this.elements.hintVolume) this.elements.hintVolume.classList.toggle('active', isPinching);
+            if (this.elements.hintWave) this.elements.hintWave.classList.toggle('active', isWave);
+
+            if (this.elements.hintStatus) {
+                if (!hasHand) {
+                    statusMessage = 'Show your hand';
+                } else if (gestureState.playPause) {
+                    statusMessage = audioState.isPlaying ? 'Playing' : 'Paused';
+                } else if (gestureState.trackSwitch) {
+                    statusMessage = 'Next track';
+                } else if (gestureState.stemSelectionLocked && gestureState.stemSelectionLockRemainingMs > 0) {
+                    const secs = Math.ceil(gestureState.stemSelectionLockRemainingMs / 1000);
+                    statusMessage = `Stem lock ${secs}s - pinch to mix`;
+                } else if (gestureState.stemSelect >= 0) {
+                    const stemIndex = gestureState.stemSelect;
+                    const stemVolume = (audioState.stemVolumes && audioState.stemVolumes[stemIndex]) || 0;
+                    statusMessage = `Selected stem ${stemIndex + 1} (${Math.round(stemVolume * 100)}%)`;
+                } else if (gestureState.isPinching) {
+                    const selected = audioState.selectedStem >= 0 ? audioState.selectedStem + 1 : '--';
+                    statusMessage = `Stem ${selected} volume ${Math.round(gestureState.volume * 100)}%`;
+                } else {
+                    statusMessage = audioState.selectedStem >= 0
+                        ? `Stem ${audioState.selectedStem + 1} ready - pinch to set volume`
+                        : `Hold 1-${CONFIG.STEMS_PER_TRACK} fingers to choose a stem`;
+                }
+                this.elements.hintStatus.textContent = statusMessage;
+            }
+        }
+
+        return statusMessage;
     }
 }

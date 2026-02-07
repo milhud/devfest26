@@ -1,292 +1,233 @@
 /**
- * Audio engine with support for track folders and effects.
+ * Audio engine with stem-based playback.
+ * Each track folder has 5 stems (stem1-5.mp3/wav).
+ * All stems run in sync; selection targets a layer for volume control.
  */
 
 import { CONFIG } from './config.js';
 
 export class AudioEngine {
     constructor() {
-        this.decks = { left: null, right: null };
-        this.effects = [];
-        this.crossfaderValue = CONFIG.DEFAULT_CROSSFADE;
+        this.currentTrackIndex = 0;
+        this.currentTrackFolder = CONFIG.TRACK_FOLDERS[0];
+        this.stems = [];  // Array of { player, gain } for current track
+        this.masterVolume = null;
+        this.selectedStem = -1;  // -1 = none selected
+        this.stemVolumes = [];   // 0..1 volume per stem
+        this.isPlaying = false;
         this.isInitialized = false;
-        this.tracksLoaded = false;
+        this.isStarted = false;
     }
 
     async initialize() {
         await Tone.start();
         console.log('Audio context started');
 
-        // Create decks
-        this.decks.left = await this._createDeck('left', 0);
-        this.decks.right = await this._createDeck('right', 1);
+        // Master volume node (used for play/pause gating)
+        this.masterVolume = new Tone.Volume(0).toDestination();
 
-        // Load effects
-        await this._loadEffects();
+        // Load first track's stems
+        await this._loadTrack(0);
+
+        // Keep stems running in sync from the start
+        this.isPlaying = true;
+        this._applyStemGains();
 
         this.isInitialized = true;
-        this.tracksLoaded = true;
+        console.log('Audio engine ready');
     }
 
-    async _createDeck(deckId, trackIndex) {
-        const trackFolder = CONFIG.TRACK_FOLDERS[trackIndex];
-        const trackInfo = await this._loadTrackFolder(trackFolder);
+    async _loadTrack(trackIndex) {
+        // Dispose old stems
+        for (const stem of this.stems) {
+            if (!stem) continue;
+            try { stem.player.stop(); } catch (e) {}
+            stem.player.dispose();
+            stem.gain.dispose();
+        }
+        this.stems = [];
+        this.stemVolumes = [];
+        this.isStarted = false;
 
-        const deck = {
-            trackIndex,
-            trackFolder,
-            trackInfo,
-            players: {},
-            volume: new Tone.Volume(0).toDestination(),
-            filter: new Tone.Filter(CONFIG.FILTER_MAX_FREQ, 'lowpass', -24).toDestination(),
-            volumeLevel: CONFIG.DEFAULT_VOLUME,
-            isPlaying: false,
-            filterFreq: CONFIG.FILTER_MAX_FREQ,
-        };
+        const folder = CONFIG.TRACK_FOLDERS[trackIndex];
+        this.currentTrackIndex = trackIndex;
+        this.currentTrackFolder = folder;
 
-        // Create players for each audio file
-        for (const [key, url] of Object.entries(trackInfo.files)) {
-            const player = new Tone.Player(url);
-            player.loop = true;
-            player.chain(deck.filter, deck.volume);
-            deck.players[key] = player;
+        console.log(`Loading track: ${folder}`);
+
+        // Load all 5 stems
+        for (let i = 1; i <= CONFIG.STEMS_PER_TRACK; i++) {
+            const stem = await this._loadStem(folder, i);
+            this.stems.push(stem);
+            this.stemVolumes.push(0);
         }
 
-        // Wait for all players to load
-        await Promise.all(
-            Object.values(deck.players).map(p =>
-                new Promise(resolve => {
-                    if (p.loaded) resolve();
-                    else p.buffer.onload = resolve;
-                })
-            )
-        );
+        console.log(`Loaded ${this.stems.filter(s => s !== null).length} stems from ${folder}`);
 
-        console.log(`Deck ${deckId} loaded: ${trackFolder}`, trackInfo.type);
-        return deck;
+        // Start all available stems at zero gain to keep them in sync
+        this._startAllStems();
+        this._applyStemGains();
     }
 
-    async _loadTrackFolder(folder) {
-        // Try to find vocals and instrumental first
-        const possibleFiles = [
-            { key: 'vocals', paths: [`/music/${folder}/vocals.wav`, `/music/${folder}/vocals.mp3`] },
-            { key: 'instrumental', paths: [`/music/${folder}/instrumental.wav`, `/music/${folder}/instrumental.mp3`] },
-            { key: 'track', paths: [`/music/${folder}/${folder}.wav`, `/music/${folder}/${folder}.mp3`, `/music/${folder}/track.wav`, `/music/${folder}/track.mp3`] },
+    async _loadStem(folder, stemNumber) {
+        const paths = [
+            `/music/${folder}/stem${stemNumber}.mp3`,
+            `/music/${folder}/stem${stemNumber}.wav`,
         ];
 
-        const files = {};
-        let type = 'single';
-
-        // Check for each file type
-        for (const file of possibleFiles) {
-            for (const path of file.paths) {
-                try {
-                    const response = await fetch(path, { method: 'HEAD' });
-                    if (response.ok) {
-                        files[file.key] = path;
-                        break;
-                    }
-                } catch (e) {
-                    // File doesn't exist
-                }
-            }
-        }
-
-        // Determine type
-        if (files.vocals && files.instrumental) {
-            type = 'stems';
-            delete files.track;  // Don't need single track if we have stems
-        } else if (files.track) {
-            type = 'single';
-            delete files.vocals;
-            delete files.instrumental;
-        } else if (Object.keys(files).length === 0) {
-            // Fallback: try to find any audio file
-            console.warn(`No audio files found in ${folder}, using silence`);
-            files.track = null;
-        }
-
-        return { type, files, folder };
-    }
-
-    async _loadEffects() {
-        for (let i = 0; i < CONFIG.EFFECTS.length; i++) {
+        for (const path of paths) {
             try {
-                const player = new Tone.Player(CONFIG.EFFECTS[i]).toDestination();
-                await new Promise(resolve => {
-                    if (player.loaded) resolve();
-                    else player.buffer.onload = resolve;
-                });
-                this.effects.push(player);
-                console.log(`Effect ${i + 1} loaded`);
+                const response = await fetch(path, { method: 'HEAD' });
+                if (response.ok) {
+                    const gain = new Tone.Gain(0);
+                    const player = new Tone.Player({
+                        url: path,
+                        loop: true,
+                        onload: () => console.log(`  Loaded stem${stemNumber}`),
+                        onerror: (e) => console.error(`  Error loading stem${stemNumber}:`, e),
+                    });
+                    player.connect(gain);
+                    gain.connect(this.masterVolume);
+
+                    // Wait for load with timeout
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => resolve(), 10000);  // 10s timeout
+                        const check = () => {
+                            if (player.loaded) {
+                                clearTimeout(timeout);
+                                resolve();
+                            } else {
+                                setTimeout(check, 100);
+                            }
+                        };
+                        check();
+                    });
+
+                    return { player, gain };
+                }
             } catch (e) {
-                console.warn(`Failed to load effect ${i + 1}:`, e);
-                this.effects.push(null);
+                console.log(`  stem${stemNumber}: ${path} not found`);
             }
         }
+
+        return null;
     }
 
-    playEffect(index) {
-        if (index >= 0 && index < this.effects.length && this.effects[index]) {
-            this.effects[index].start();
-            console.log(`Playing effect ${index + 1}`);
+    _startAllStems() {
+        if (this.isStarted) return;
+        const startTime = Tone.now() + 0.05;
+        for (const stem of this.stems) {
+            if (!stem) continue;
+            try { stem.player.start(startTime); } catch (e) { console.error('Start error:', e); }
+        }
+        this.isStarted = true;
+    }
+
+    _applyStemGains() {
+        for (let i = 0; i < this.stems.length; i++) {
+            const stem = this.stems[i];
+            if (!stem) continue;
+            const target = this.isPlaying ? this.stemVolumes[i] : 0;
+            stem.gain.gain.value = target;
         }
     }
 
-    setCrossfader(value) {
-        this.crossfaderValue = value;
-        this._updateGains();
-    }
+    selectStem(stemIndex) {
+        // stemIndex: 0-4 (for stems 1-5)
+        if (stemIndex < 0) return;
 
-    setVolume(deckId, value) {
-        const deck = this.decks[deckId];
-        if (deck) {
-            deck.volumeLevel = value;
-            this._updateGains();
-        }
-    }
-
-    _updateGains() {
-        const leftCrossfade = Math.cos(this.crossfaderValue * Math.PI / 2);
-        const rightCrossfade = Math.sin(this.crossfaderValue * Math.PI / 2);
-
-        if (this.decks.left) {
-            const leftGain = this.decks.left.volumeLevel * leftCrossfade;
-            this.decks.left.volume.volume.value = this._gainToDb(leftGain);
+        // Check if stem exists
+        if (stemIndex >= 0 && !this.stems[stemIndex]) {
+            console.log(`Stem ${stemIndex + 1} not available`);
+            return;  // Don't select non-existent stems
         }
 
-        if (this.decks.right) {
-            const rightGain = this.decks.right.volumeLevel * rightCrossfade;
-            this.decks.right.volume.volume.value = this._gainToDb(rightGain);
+        this.selectedStem = stemIndex;
+        if (this.stemVolumes[stemIndex] <= 0) {
+            this.stemVolumes[stemIndex] = CONFIG.SELECTED_STEM_DEFAULT_VOLUME;
+            this._applyStemGains();
         }
+        console.log(`Selected stem ${stemIndex + 1}`);
     }
 
-    _gainToDb(gain) {
-        if (gain <= 0) return -Infinity;
-        return 20 * Math.log10(gain);
+    play() {
+        if (this.isPlaying) return;
+        this._startAllStems();
+        this.isPlaying = true;
+        this._applyStemGains();
+        console.log(`Playing stem ${this.selectedStem >= 0 ? this.selectedStem + 1 : 'none'}`);
     }
 
-    setFilterFrequency(deckId, normalizedValue) {
-        const deck = this.decks[deckId];
-        if (deck) {
-            const minFreq = CONFIG.FILTER_MIN_FREQ;
-            const maxFreq = CONFIG.FILTER_MAX_FREQ;
-            const freq = minFreq * Math.pow(maxFreq / minFreq, normalizedValue);
-            deck.filterFreq = freq;
-            deck.filter.frequency.rampTo(freq, 0.05);
-        }
+    stop() {
+        if (!this.isPlaying) return;
+        this.isPlaying = false;
+        this._applyStemGains();
+        console.log('Stopped');
     }
 
-    togglePlayPause(deckId) {
-        const deck = this.decks[deckId];
-        if (!deck) return;
-
-        if (deck.isPlaying) {
-            // Stop all players
-            for (const player of Object.values(deck.players)) {
-                if (player) player.stop();
-            }
-            deck.isPlaying = false;
-            console.log(`${deckId} deck: stopped`);
+    togglePlayPause() {
+        if (this.isPlaying) {
+            this.stop();
         } else {
-            // Start all players
-            for (const player of Object.values(deck.players)) {
-                if (player) player.start();
-            }
-            deck.isPlaying = true;
-            console.log(`${deckId} deck: playing`);
+            this.play();
         }
     }
 
-    async switchTrack(deckId, direction = 1) {
-        const deck = this.decks[deckId];
-        if (!deck) return;
+    setStemVolume(stemIndex, value) {
+        if (stemIndex < 0 || stemIndex >= this.stems.length) return;
+        if (!this.stems[stemIndex]) return;
+        this.stemVolumes[stemIndex] = clamp01(value);
+        this._applyStemGains();
+    }
 
-        const wasPlaying = deck.isPlaying;
+    async nextTrack() {
+        const wasPlaying = this.isPlaying;
+        const wasStem = this.selectedStem;
+        const wasStemVolumes = [...this.stemVolumes];
 
-        // Stop current playback
+        // Stop current
+        this.stop();
+
+        // Load next track
+        let nextIndex = this.currentTrackIndex + 1;
+        if (nextIndex >= CONFIG.TRACK_FOLDERS.length) nextIndex = 0;
+
+        await this._loadTrack(nextIndex);
+
+        // Restore layer state and transport state
+        this.selectedStem = wasStem;
+        for (let i = 0; i < this.stemVolumes.length; i++) {
+            if (this.stems[i]) {
+                this.stemVolumes[i] = wasStemVolumes[i] ?? 0;
+            }
+        }
         if (wasPlaying) {
-            for (const player of Object.values(deck.players)) {
-                if (player) player.stop();
-            }
-        }
-
-        // Calculate new track index
-        let newIndex = deck.trackIndex + direction;
-        if (newIndex < 0) newIndex = CONFIG.TRACK_FOLDERS.length - 1;
-        if (newIndex >= CONFIG.TRACK_FOLDERS.length) newIndex = 0;
-
-        // Dispose old players
-        for (const player of Object.values(deck.players)) {
-            if (player) player.dispose();
-        }
-
-        // Load new track
-        const trackFolder = CONFIG.TRACK_FOLDERS[newIndex];
-        const trackInfo = await this._loadTrackFolder(trackFolder);
-
-        deck.trackIndex = newIndex;
-        deck.trackFolder = trackFolder;
-        deck.trackInfo = trackInfo;
-        deck.players = {};
-
-        // Create new players
-        for (const [key, url] of Object.entries(trackInfo.files)) {
-            if (url) {
-                const player = new Tone.Player(url);
-                player.loop = true;
-                player.chain(deck.filter, deck.volume);
-                deck.players[key] = player;
-            }
-        }
-
-        // Wait for load
-        await Promise.all(
-            Object.values(deck.players).map(p =>
-                new Promise(resolve => {
-                    if (p.loaded) resolve();
-                    else p.buffer.onload = resolve;
-                })
-            )
-        );
-
-        console.log(`Switched ${deckId} to: ${trackFolder}`);
-
-        // Resume if was playing
-        if (wasPlaying) {
-            for (const player of Object.values(deck.players)) {
-                if (player) player.start();
-            }
-            deck.isPlaying = true;
+            this.play();
+        } else {
+            this._applyStemGains();
         }
     }
 
-    getDeckInfo(deckId) {
-        const deck = this.decks[deckId];
-        if (!deck) {
-            return {
-                trackName: '--',
-                trackType: 'single',
-                volume: 0,
-                isPlaying: false,
-                filterFreq: CONFIG.FILTER_MAX_FREQ,
-            };
-        }
-
+    getState() {
         return {
-            trackName: deck.trackFolder,
-            trackType: deck.trackInfo?.type || 'single',
-            volume: deck.volumeLevel,
-            isPlaying: deck.isPlaying,
-            filterFreq: deck.filterFreq,
+            trackFolder: this.currentTrackFolder,
+            trackIndex: this.currentTrackIndex,
+            selectedStem: this.selectedStem,
+            stemVolumes: [...this.stemVolumes],
+            isPlaying: this.isPlaying,
+            volume: this.selectedStem >= 0 ? this.stemVolumes[this.selectedStem] || 0 : 0,
+            stemCount: this.stems.filter(s => s !== null).length,
+            availableStems: this.stems.map(s => s !== null),
         };
-    }
-
-    getCrossfader() {
-        return this.crossfaderValue;
     }
 
     isReady() {
-        return this.isInitialized && this.tracksLoaded;
+        return this.isInitialized;
     }
+}
+
+function clamp01(value) {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
 }

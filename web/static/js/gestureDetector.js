@@ -1,251 +1,147 @@
 /**
- * Gesture detection with "sticky" controls.
- * Gestures are triggered once and values stay until changed.
+ * Gesture detection for stem-based DJ control.
+ * - Hold 1-N fingers = select stem 1-N
+ * - Fist (0 fingers) = play/pause
+ * - Pinch height = volume
+ * - Wave = switch track
  */
 
 import { CONFIG } from './config.js';
-import { KalmanFilter, clamp, mapRange } from './kalmanFilter.js';
+import { KalmanFilter, clamp } from './kalmanFilter.js';
 
 export class GestureDetector {
     constructor() {
-        // Smoothing filters
-        this.crossfaderFilter = new KalmanFilter(CONFIG.KALMAN_Q, CONFIG.KALMAN_R);
-        this.volumeLeftFilter = new KalmanFilter(CONFIG.KALMAN_Q, CONFIG.KALMAN_R);
-        this.volumeRightFilter = new KalmanFilter(CONFIG.KALMAN_Q, CONFIG.KALMAN_R);
-        this.filterSweepFilter = new KalmanFilter(CONFIG.KALMAN_Q * 2, CONFIG.KALMAN_R);
+        this.volumeFilter = new KalmanFilter(CONFIG.KALMAN_Q, CONFIG.KALMAN_R);
 
-        // Sticky values (persist when hands leave)
-        this.stickyValues = {
-            crossfader: 0.5,
-            volumeLeft: CONFIG.DEFAULT_VOLUME,
-            volumeRight: CONFIG.DEFAULT_VOLUME,
-            filterSweep: 1.0,  // Full open
-        };
+        // State tracking
+        this.currentFingerCount = 0;
+        this.lastStemSelectTime = 0;
+        this.fingerCandidate = -1;
+        this.fingerCandidateStart = 0;
+        this.lastCommittedFinger = -1;
+        this.stemSelectLockUntil = 0;
 
-        // Play/pause state tracking
-        this.lastHandState = { left: null, right: null };
-        this.playPauseLastTrigger = { left: 0, right: 0 };
+        // Play/pause tracking (fist transition)
+        this.wasFist = false;
+        this.lastPlayPauseTime = 0;
 
-        // Track switch (wrist flick)
-        this.lastRollAngle = { left: null, right: null };
-        this.trackSwitchLastTrigger = { left: 0, right: 0 };
+        // Wave detection
+        this.waveHistory = [];
+        this.lastWaveTime = 0;
+        this.lastWaveMotionTime = 0;
+        this.lastX = null;
+        this.waveDirection = 0;
+        this.waveCount = 0;
 
-        // Effect triggers (finger spread)
-        this.effectLastTrigger = [0, 0, 0];
-
-        // Pinch state for "grabbing" controls
-        this.isPinching = { left: false, right: false };
+        // Volume (sticky)
+        this.stickyVolume = CONFIG.DEFAULT_VOLUME;
     }
 
     update(hands, timestamp) {
         const state = {
-            // Use sticky values by default
-            crossfader: this.stickyValues.crossfader,
-            volumeLeft: this.stickyValues.volumeLeft,
-            volumeRight: this.stickyValues.volumeRight,
-            filterSweep: this.stickyValues.filterSweep,
-            // Event triggers
-            playPauseLeft: false,
-            playPauseRight: false,
-            trackSwitchLeft: 0,   // -1 = prev, 0 = none, 1 = next
-            trackSwitchRight: 0,
-            effectTrigger: -1,    // -1 = none, 0-2 = effect index
-            // Active zones
-            activeZones: { deck_left: false, deck_right: false, crossfader: false },
-            // Hands detected
-            handsDetected: hands.length,
+            fingerCount: 0,
+            stemSelect: -2,  // -2 = no change, -1 = deselect, 0-4 = select stem
+            playPause: false,
+            trackSwitch: false,
+            volume: this.stickyVolume,
+            handDetected: false,
+            isFist: false,
+            isOpen: false,
+            isPinching: false,
+            stemSelectionLocked: false,
+            stemSelectionLockRemainingMs: 0,
         };
 
-        for (const hand of hands) {
-            const handId = hand.handedness.toLowerCase();
-            const zone = this._getZone(hand.palmCenter);
-
-            if (zone) {
-                state.activeZones[zone] = true;
-
-                // Only update values if pinching (grabbing the control)
-                if (hand.isPinching) {
-                    this.isPinching[handId] = true;
-
-                    if (zone === 'crossfader') {
-                        this._processCrossfader(hand, state);
-                    } else if (zone === 'deck_left') {
-                        this._processVolume(hand, state, 'left');
-                        this._processFilterSweep(hand, state);
-                    } else if (zone === 'deck_right') {
-                        this._processVolume(hand, state, 'right');
-                    }
-                } else {
-                    this.isPinching[handId] = false;
-                }
-            }
-
-            // Play/pause - fist gesture (works anywhere in deck zone)
-            this._processPlayPause(hand, state, timestamp, zone);
-
-            // Track switch - wrist flick
-            this._processTrackSwitch(hand, state, timestamp, zone);
-
-            // Effects - specific finger patterns
-            this._processEffects(hand, state, timestamp);
+        if (hands.length === 0) {
+            this.lastX = null;
+            this.waveCount = 0;
+            this.fingerCandidate = -1;
+            this.fingerCandidateStart = 0;
+            this.lastCommittedFinger = -1;
+            return state;
         }
+
+        const hand = hands[0];
+        state.handDetected = true;
+
+        // Count fingers
+        const fingerCount = this._countFingers(hand);
+        state.fingerCount = fingerCount;
+        state.isFist = fingerCount === 0;
+        state.isOpen = fingerCount >= 4;
+        state.isPinching = !!hand.isPinching;
+        state.stemSelectionLocked = timestamp < this.stemSelectLockUntil;
+        state.stemSelectionLockRemainingMs = Math.max(0, this.stemSelectLockUntil - timestamp);
+
+        // Stem selection based on stable finger hold
+        if (fingerCount >= 1 && fingerCount <= CONFIG.STEMS_PER_TRACK && !hand.isPinching && !state.stemSelectionLocked) {
+            if (this.fingerCandidate !== fingerCount) {
+                this.fingerCandidate = fingerCount;
+                this.fingerCandidateStart = timestamp;
+            } else if (
+                this.lastCommittedFinger !== fingerCount &&
+                timestamp - this.fingerCandidateStart >= CONFIG.STEM_SELECT_HOLD_MS &&
+                timestamp - this.lastStemSelectTime >= CONFIG.STEM_SELECT_DEBOUNCE_MS
+            ) {
+                state.stemSelect = fingerCount - 1;  // 1-5 -> 0-4
+                this.lastCommittedFinger = fingerCount;
+                this.lastStemSelectTime = timestamp;
+            }
+        } else {
+            this.fingerCandidate = -1;
+            this.fingerCandidateStart = 0;
+            if (fingerCount === 0) {
+                this.lastCommittedFinger = -1;
+            }
+        }
+
+        if (state.stemSelect >= 0) {
+            this.stemSelectLockUntil = timestamp + CONFIG.STEM_SELECT_LOCK_MS;
+            state.stemSelectionLocked = true;
+            state.stemSelectionLockRemainingMs = CONFIG.STEM_SELECT_LOCK_MS;
+        }
+
+        // Play/pause: detect transition into a fist
+        if (!this.wasFist && state.isFist) {
+            if (timestamp - this.lastPlayPauseTime > CONFIG.PLAY_PAUSE_DEBOUNCE_MS) {
+                state.playPause = true;
+                this.lastPlayPauseTime = timestamp;
+            }
+        }
+        this.wasFist = state.isFist;
+
+        // Volume based on pinch height (higher = louder)
+        if (hand.isPinching) {
+            const volume = 1 - hand.pinchPosition.y;  // Invert: top = 1, bottom = 0
+            const smoothedVolume = this.volumeFilter.filter(clamp(volume, 0, 1));
+            this.stickyVolume = smoothedVolume;
+        }
+        state.volume = this.stickyVolume;
+
+        // Wave detection for track switch
+        this._detectWave(hand, timestamp, state);
 
         return state;
     }
 
-    _getZone(point) {
-        for (const [zoneName, zone] of Object.entries(CONFIG.ZONES)) {
-            if (this._inZone(point, zone)) {
-                return zoneName;
-            }
-        }
-        return null;
-    }
-
-    _inZone(point, zone) {
-        return point.x >= zone.x1 && point.x <= zone.x2 &&
-               point.y >= zone.y1 && point.y <= zone.y2;
-    }
-
-    _processCrossfader(hand, state) {
-        const zone = CONFIG.ZONES.crossfader;
-        let rawValue = (hand.palmCenter.x - zone.x1) / (zone.x2 - zone.x1);
-        rawValue = clamp(rawValue, 0, 1);
-
-        // Apply dead zone at center
-        if (Math.abs(rawValue - 0.5) < CONFIG.CROSSFADER_DEAD_ZONE) {
-            rawValue = 0.5;
-        }
-
-        const smoothed = this.crossfaderFilter.filter(rawValue);
-        this.stickyValues.crossfader = smoothed;
-        state.crossfader = smoothed;
-    }
-
-    _processVolume(hand, state, deck) {
-        const zone = CONFIG.ZONES[`deck_${deck}`];
-        let rawValue = 1 - (hand.palmCenter.y - zone.y1) / (zone.y2 - zone.y1);
-        rawValue = clamp(rawValue, 0, 1);
-
-        // Dead zones at extremes
-        if (rawValue < CONFIG.VOLUME_DEAD_ZONE) rawValue = 0;
-        if (rawValue > 1 - CONFIG.VOLUME_DEAD_ZONE) rawValue = 1;
-
-        const filter = deck === 'left' ? this.volumeLeftFilter : this.volumeRightFilter;
-        const smoothed = filter.filter(rawValue);
-
-        if (deck === 'left') {
-            this.stickyValues.volumeLeft = smoothed;
-            state.volumeLeft = smoothed;
-        } else {
-            this.stickyValues.volumeRight = smoothed;
-            state.volumeRight = smoothed;
-        }
-    }
-
-    _processFilterSweep(hand, state) {
-        let rawValue = mapRange(hand.rollAngle, CONFIG.ROLL_MIN, CONFIG.ROLL_MAX, 0, 1);
-        rawValue = clamp(rawValue, 0, 1);
-
-        const smoothed = this.filterSweepFilter.filter(rawValue);
-        this.stickyValues.filterSweep = smoothed;
-        state.filterSweep = smoothed;
-    }
-
-    _processPlayPause(hand, state, timestamp, zone) {
-        const handId = hand.handedness.toLowerCase();
-
-        // Determine which deck based on zone or hand
-        let deck = null;
-        if (zone === 'deck_left') deck = 'left';
-        else if (zone === 'deck_right') deck = 'right';
-        else if (handId === 'left') deck = 'left';
-        else if (handId === 'right') deck = 'right';
-
-        if (!deck) return;
-
-        // Get current state
-        let currentState = null;
-        if (hand.isFist) currentState = 'fist';
-        else if (hand.isOpenPalm) currentState = 'open';
-
-        // Detect open palm -> fist transition
-        if (this.lastHandState[handId] === 'open' && currentState === 'fist') {
-            const lastTrigger = this.playPauseLastTrigger[deck];
-            if (timestamp - lastTrigger > CONFIG.PLAY_PAUSE_DEBOUNCE_MS) {
-                if (deck === 'left') state.playPauseLeft = true;
-                else state.playPauseRight = true;
-                this.playPauseLastTrigger[deck] = timestamp;
-            }
-        }
-
-        if (currentState) {
-            this.lastHandState[handId] = currentState;
-        }
-    }
-
-    _processTrackSwitch(hand, state, timestamp, zone) {
-        const handId = hand.handedness.toLowerCase();
-
-        // Only in deck zones
-        let deck = null;
-        if (zone === 'deck_left') deck = 'left';
-        else if (zone === 'deck_right') deck = 'right';
-
-        if (!deck) {
-            this.lastRollAngle[handId] = null;
-            return;
-        }
-
-        const currentRoll = hand.rollAngle;
-
-        if (this.lastRollAngle[handId] !== null) {
-            const rollDelta = currentRoll - this.lastRollAngle[handId];
-
-            // Detect quick wrist flick
-            if (Math.abs(rollDelta) > CONFIG.FLICK_ANGLE_THRESHOLD) {
-                const lastTrigger = this.trackSwitchLastTrigger[deck];
-                if (timestamp - lastTrigger > CONFIG.TRACK_SWITCH_DEBOUNCE_MS) {
-                    const direction = rollDelta > 0 ? 1 : -1;
-                    if (deck === 'left') state.trackSwitchLeft = direction;
-                    else state.trackSwitchRight = direction;
-                    this.trackSwitchLastTrigger[deck] = timestamp;
-                    console.log(`Track switch ${deck}: ${direction > 0 ? 'next' : 'prev'}`);
-                }
-            }
-        }
-
-        this.lastRollAngle[handId] = currentRoll;
-    }
-
-    _processEffects(hand, state, timestamp) {
-        // Count extended fingers (fingertips far from palm)
-        const fingerCount = this._countExtendedFingers(hand);
-
-        // 1 finger = effect 1, 2 fingers = effect 2, 3 fingers = effect 3
-        if (fingerCount >= 1 && fingerCount <= 3 && !hand.isFist) {
-            const effectIndex = fingerCount - 1;
-            if (timestamp - this.effectLastTrigger[effectIndex] > CONFIG.EFFECT_DEBOUNCE_MS) {
-                // Only trigger if it's a "pointing" gesture (not open palm)
-                if (!hand.isOpenPalm) {
-                    state.effectTrigger = effectIndex;
-                    this.effectLastTrigger[effectIndex] = timestamp;
-                }
-            }
-        }
-    }
-
-    _countExtendedFingers(hand) {
+    _countFingers(hand) {
         const palmCenter = hand.palmCenter;
         let count = 0;
 
+        // Check each fingertip distance from palm
         for (const tipIndex of CONFIG.FINGERTIPS) {
             const tip = hand.landmarks[tipIndex];
             const dist = Math.sqrt(
                 Math.pow(tip.x - palmCenter.x, 2) +
                 Math.pow(tip.y - palmCenter.y, 2)
             );
-            if (dist > CONFIG.PALM_OPEN_THRESHOLD * 0.8) {
+
+            // Thumb has different threshold (it's more sideways)
+            const threshold = tipIndex === 4
+                ? CONFIG.PALM_OPEN_THRESHOLD * 0.7
+                : CONFIG.PALM_OPEN_THRESHOLD;
+
+            if (dist > threshold) {
                 count++;
             }
         }
@@ -253,12 +149,55 @@ export class GestureDetector {
         return count;
     }
 
+    _detectWave(hand, timestamp, state) {
+        const x = hand.palmCenter.x;
+
+        if (this.lastX !== null) {
+            const dx = x - this.lastX;
+
+            // Detect direction change
+            if (Math.abs(dx) > CONFIG.WAVE_VELOCITY_THRESHOLD) {
+                this.lastWaveMotionTime = timestamp;
+                const newDirection = dx > 0 ? 1 : -1;
+
+                if (this.waveDirection !== 0 && newDirection !== this.waveDirection) {
+                    // Direction changed = one wave
+                    this.waveCount++;
+
+                    if (this.waveCount >= CONFIG.WAVE_COUNT_THRESHOLD) {
+                        if (timestamp - this.lastWaveTime > CONFIG.TRACK_SWITCH_DEBOUNCE_MS) {
+                            state.trackSwitch = true;
+                            this.lastWaveTime = timestamp;
+                            this.waveCount = 0;
+                        }
+                    }
+                }
+
+                this.waveDirection = newDirection;
+            }
+        }
+
+        this.lastX = x;
+
+        // Reset wave count if too much time passed
+        if (timestamp - this.lastWaveMotionTime > CONFIG.WAVE_TIMEOUT_MS) {
+            this.waveCount = 0;
+            this.waveDirection = 0;
+        }
+    }
+
     reset() {
-        this.crossfaderFilter.reset();
-        this.volumeLeftFilter.reset();
-        this.volumeRightFilter.reset();
-        this.filterSweepFilter.reset();
-        this.lastHandState = { left: null, right: null };
-        this.lastRollAngle = { left: null, right: null };
+        this.volumeFilter.reset();
+        this.lastStemSelectTime = 0;
+        this.fingerCandidate = -1;
+        this.fingerCandidateStart = 0;
+        this.lastCommittedFinger = -1;
+        this.stemSelectLockUntil = 0;
+        this.wasFist = false;
+        this.lastPlayPauseTime = 0;
+        this.lastX = null;
+        this.waveCount = 0;
+        this.waveDirection = 0;
+        this.lastWaveMotionTime = 0;
     }
 }

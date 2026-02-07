@@ -15,35 +15,25 @@ export class DJController {
         const gestureState = this.gestureDetector.update(hands, timestamp);
         this.lastGestureState = gestureState;
 
-        // Apply crossfader
-        this.audio.setCrossfader(gestureState.crossfader);
-
-        // Apply volumes
-        this.audio.setVolume('left', gestureState.volumeLeft);
-        this.audio.setVolume('right', gestureState.volumeRight);
-
-        // Apply filter
-        this.audio.setFilterFrequency('left', gestureState.filterSweep);
-
-        // Handle play/pause
-        if (gestureState.playPauseLeft) {
-            this.audio.togglePlayPause('left');
-        }
-        if (gestureState.playPauseRight) {
-            this.audio.togglePlayPause('right');
+        // Stem selection (1-5 fingers)
+        if (gestureState.stemSelect >= 0) {
+            this.audio.selectStem(gestureState.stemSelect);
         }
 
-        // Handle track switching
-        if (gestureState.trackSwitchLeft !== 0) {
-            this.audio.switchTrack('left', gestureState.trackSwitchLeft);
-        }
-        if (gestureState.trackSwitchRight !== 0) {
-            this.audio.switchTrack('right', gestureState.trackSwitchRight);
+        // Play/pause toggle
+        if (gestureState.playPause) {
+            this.audio.togglePlayPause();
         }
 
-        // Handle effects
-        if (gestureState.effectTrigger >= 0) {
-            this.audio.playEffect(gestureState.effectTrigger);
+        // Pinch controls volume for currently selected stem
+        const audioState = this.audio.getState();
+        if (gestureState.isPinching && audioState.selectedStem >= 0) {
+            this.audio.setStemVolume(audioState.selectedStem, gestureState.volume);
+        }
+
+        // Track switch (wave)
+        if (gestureState.trackSwitch) {
+            this.audio.nextTrack();
         }
 
         return gestureState;
@@ -51,9 +41,7 @@ export class DJController {
 
     getState() {
         return {
-            deckLeft: this.audio.getDeckInfo('left'),
-            deckRight: this.audio.getDeckInfo('right'),
-            crossfader: this.audio.getCrossfader(),
+            audio: this.audio.getState(),
             gestures: this.lastGestureState,
         };
     }
@@ -61,9 +49,5 @@ export class DJController {
     reset() {
         this.gestureDetector.reset();
         this.lastGestureState = null;
-    }
-
-    getLastGestureState() {
-        return this.lastGestureState;
     }
 }

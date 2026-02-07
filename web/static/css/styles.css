@@ -1,4 +1,4 @@
-/* DJ Booth - Transparent Background */
+/* DJ Booth - Stem Controller */
 * {
     margin: 0;
     padding: 0;
@@ -6,7 +6,7 @@
 }
 
 body {
-    background: transparent;
+    background: #000;
     color: #fff;
     font-family: 'Segoe UI', system-ui, sans-serif;
     overflow: hidden;
@@ -15,20 +15,17 @@ body {
     flex-direction: column;
 }
 
-/* Camera Section */
+/* Camera Section - Full screen */
 #camera-section {
     flex: 1;
     position: relative;
-    background: rgba(0, 0, 0, 0.3);
-    min-height: 35vh;
+    background: #000;
 }
 
 #webcam {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1);
-    opacity: 0.9;
 }
 
 #overlay {
@@ -37,337 +34,123 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    transform: scaleX(-1);
     pointer-events: none;
     z-index: 2;
 }
 
-#hand-status {
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.6);
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-size: 14px;
-    color: #00ff88;
-    z-index: 10;
-    backdrop-filter: blur(5px);
-}
-
-/* DJ Booth */
+/* DJ Booth - Compact bottom bar */
 #dj-booth {
-    height: 50vh;
-    min-height: 280px;
-    background: linear-gradient(180deg, rgba(22, 33, 62, 0.95) 0%, rgba(15, 15, 35, 0.98) 100%);
+    background: rgba(0, 0, 0, 0.85);
+    padding: 8px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
-    border-top: 2px solid #ff6b35;
-    backdrop-filter: blur(10px);
+    border-top: 1px solid #333;
 }
 
-/* Decks */
-.deck {
+#gesture-hints {
+    background: rgba(5, 5, 10, 0.9);
+    border-top: 1px solid #222;
+    padding: 6px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: #777;
+    letter-spacing: 0.2px;
+}
+
+#gesture-hints .hint {
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+#gesture-hints .hint.active {
+    color: #fff;
+    border-color: #ff6b35;
+    box-shadow: 0 0 8px rgba(255, 107, 53, 0.35);
+}
+
+#gesture-hints .hint-status {
+    margin-left: auto;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+}
+
+.dj-info {
+    display: flex;
+    gap: 20px;
+}
+
+.track-display,
+.stem-display,
+.status-display,
+.volume-display {
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+.dj-info .label {
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 1px;
+}
+
+.dj-info .value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ff6b35;
+}
+
+#play-status.playing {
+    color: #00ff88;
+}
+
+/* Stem indicators */
+.stem-indicators {
+    display: flex;
     gap: 8px;
 }
 
-.deck-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: #ff6b35;
-    letter-spacing: 3px;
-}
-
-/* Turntable */
-.turntable {
-    width: 120px;
-    height: 120px;
-    background: radial-gradient(circle, #1a1a2e 0%, #0a0a15 100%);
+.stem-dot {
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow:
-        0 0 0 3px #333,
-        0 0 15px rgba(255, 107, 53, 0.2),
-        inset 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-.vinyl {
-    width: 100px;
-    height: 100px;
-    background: repeating-radial-gradient(
-        circle at center,
-        #1a1a1a 0px,
-        #1a1a1a 2px,
-        #222 2px,
-        #222 4px
-    );
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-}
-
-.vinyl.playing {
-    animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.vinyl-label {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #ff6b35, #ff3250);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 7px;
-    font-weight: 700;
-    color: #fff;
-    text-align: center;
-    text-transform: uppercase;
-}
-
-.vinyl-dot {
-    position: absolute;
-    width: 5px;
-    height: 5px;
-    background: #fff;
-    border-radius: 50%;
-    top: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.track-type {
-    font-size: 9px;
-    color: #666;
-    letter-spacing: 1px;
-    background: rgba(255, 107, 53, 0.1);
-    padding: 2px 8px;
-    border-radius: 3px;
-}
-
-/* Deck Controls */
-.deck-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-/* Knobs */
-.knob-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-}
-
-.knob {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
-    border-radius: 50%;
-    position: relative;
-    box-shadow:
-        0 3px 6px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    border: 2px solid #333;
-}
-
-.knob-indicator {
-    position: absolute;
-    width: 3px;
-    height: 12px;
-    background: #ff6b35;
-    border-radius: 2px;
-    top: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    transform-origin: center 16px;
-}
-
-.knob-label {
-    font-size: 8px;
-    color: #666;
-    letter-spacing: 1px;
-}
-
-.knob-value {
-    font-size: 10px;
-    color: #ff6b35;
-    font-weight: 700;
-}
-
-/* Play Button */
-.play-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
+    background: #222;
     border: 2px solid #444;
-    background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
-    color: #666;
-    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
     font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
+    color: #666;
+    transition: all 0.15s;
 }
 
-.play-btn:hover {
-    border-color: #ff6b35;
-    color: #ff6b35;
-}
-
-.play-btn.playing {
+.stem-dot.active {
     background: linear-gradient(145deg, #ff6b35, #ff3250);
     border-color: #ff6b35;
     color: #fff;
-    box-shadow: 0 0 15px rgba(255, 107, 53, 0.5);
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
 }
 
-/* Mixer */
-#mixer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-    padding: 0 20px;
+.stem-dot.selected {
+    border-color: #00ffff;
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.6);
 }
 
-.mixer-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+.stem-dot.playing {
+    animation: pulse 1s ease-in-out infinite;
 }
 
-/* Crossfader */
-.crossfader-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
-}
-
-.crossfader-label {
-    font-size: 9px;
-    color: #666;
-    letter-spacing: 1px;
-}
-
-.crossfader-track {
-    width: 150px;
-    height: 10px;
-    background: #0a0a15;
-    border-radius: 5px;
-    position: relative;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.crossfader-knob {
-    position: absolute;
-    width: 24px;
-    height: 16px;
-    background: linear-gradient(180deg, #ff6b35, #ff3250);
-    border-radius: 3px;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.4);
-    transition: left 0.05s ease-out;
-}
-
-.crossfader-labels {
-    display: flex;
-    justify-content: space-between;
-    width: 150px;
-    font-size: 10px;
-    color: #555;
-}
-
-/* Filter Knob */
-.filter-knob {
-    width: 50px;
-    height: 50px;
-}
-
-.filter-knob .knob-indicator {
-    height: 15px;
-    transform-origin: center 20px;
-}
-
-/* Effects */
-.effects-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.effects-label {
-    font-size: 8px;
-    color: #555;
-    letter-spacing: 1px;
-}
-
-.effects-row {
-    display: flex;
-    gap: 8px;
-}
-
-.effect-btn {
-    width: 40px;
-    height: 30px;
-    border: 1px solid #444;
-    background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
-    color: #666;
-    font-size: 9px;
-    font-weight: 700;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.1s;
-}
-
-.effect-btn:hover {
-    border-color: #00d4ff;
-    color: #00d4ff;
-}
-
-.effect-btn.active {
-    background: #00d4ff;
-    color: #000;
-    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-}
-
-/* Gesture Hints */
-#gesture-hints {
-    position: fixed;
-    bottom: 52vh;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    z-index: 5;
-}
-
-.hint {
-    background: rgba(0, 0, 0, 0.6);
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 10px;
-    color: #888;
-    backdrop-filter: blur(5px);
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(255, 107, 53, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(255, 107, 53, 0.8); }
 }
 
 /* Overlays */
@@ -418,6 +201,11 @@ body {
     animation: spin 1s linear infinite;
 }
 
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 #loading-overlay p, #error-overlay p {
     margin-top: 15px;
     color: #666;
@@ -440,45 +228,36 @@ body {
 /* Mobile */
 @media (max-width: 600px) {
     #dj-booth {
-        padding: 10px;
-        height: 55vh;
+        padding: 6px 10px;
     }
 
-    .turntable {
-        width: 90px;
-        height: 90px;
+    .dj-info {
+        gap: 12px;
     }
 
-    .vinyl {
-        width: 75px;
-        height: 75px;
+    .dj-info .label {
+        font-size: 8px;
     }
 
-    .vinyl-label {
-        width: 30px;
-        height: 30px;
-        font-size: 6px;
+    .dj-info .value {
+        font-size: 12px;
     }
 
-    .knob {
-        width: 35px;
-        height: 35px;
-    }
-
-    .play-btn {
-        width: 40px;
-        height: 40px;
-    }
-
-    .crossfader-track {
-        width: 100px;
-    }
-
-    #mixer {
-        padding: 0 10px;
+    .stem-dot {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
     }
 
     #gesture-hints {
-        display: none;
+        padding: 6px 10px;
+        gap: 8px;
+        font-size: 10px;
+    }
+
+    #gesture-hints .hint-status {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 2px;
     }
 }

@@ -7,55 +7,36 @@ export const CONFIG = {
     CAMERA_WIDTH: 1280,
     CAMERA_HEIGHT: 720,
 
-    // Control zones (normalized 0-1 coordinates)
-    ZONES: {
-        deck_left: { x1: 0.0, y1: 0.0, x2: 0.35, y2: 0.8 },
-        deck_right: { x1: 0.65, y1: 0.0, x2: 1.0, y2: 0.8 },
-        crossfader: { x1: 0.2, y1: 0.8, x2: 0.8, y2: 1.0 },
-    },
+    // Track folders (each contains stem1-5.mp3/wav)
+    TRACK_FOLDERS: ['track1', 'track2'],
+    STEMS_PER_TRACK: 3,
 
     // Gesture thresholds
     PINCH_THRESHOLD: 0.08,
-    FIST_THRESHOLD: 0.15,
-    PALM_OPEN_THRESHOLD: 0.12,
-
-    // Dead zones
-    CROSSFADER_DEAD_ZONE: 0.05,
-    VOLUME_DEAD_ZONE: 0.02,
+    FIST_THRESHOLD: 0.12,
+    PALM_OPEN_THRESHOLD: 0.15,
 
     // Smoothing
     KALMAN_Q: 0.08,
     KALMAN_R: 0.3,
 
     // Debouncing
-    PLAY_PAUSE_DEBOUNCE_MS: 600,
-    TRACK_SWITCH_DEBOUNCE_MS: 800,
-    EFFECT_DEBOUNCE_MS: 400,
+    STEM_SELECT_DEBOUNCE_MS: 300,
+    STEM_SELECT_HOLD_MS: 220,
+    STEM_SELECT_LOCK_MS: 4000,
+    PLAY_PAUSE_DEBOUNCE_MS: 300,
+    TRACK_SWITCH_DEBOUNCE_MS: 600,
 
-    // Wrist flick detection
-    FLICK_VELOCITY_THRESHOLD: 0.15,  // Minimum velocity for flick
-    FLICK_ANGLE_THRESHOLD: 0.3,       // Radians - how much roll change needed
+    // Control hand (single hand mode)
+    CONTROL_HAND: 'Right',
 
-    // Track folders
-    TRACK_FOLDERS: ['track1', 'track2', 'track3'],
+    // Wave detection
+    WAVE_VELOCITY_THRESHOLD: 0.03,
+    WAVE_COUNT_THRESHOLD: 1,
+    WAVE_TIMEOUT_MS: 800,
 
-    // Effects
-    EFFECTS: [
-        '/music/effects/effect1.mp3',
-        '/music/effects/effect2.mp3',
-        '/music/effects/effect3.mp3',
-    ],
-
-    DEFAULT_VOLUME: 0.7,
-    DEFAULT_CROSSFADE: 0.5,
-
-    // Filter settings
-    FILTER_MIN_FREQ: 100,
-    FILTER_MAX_FREQ: 20000,
-
-    // Roll angle thresholds
-    ROLL_MIN: -Math.PI / 4,
-    ROLL_MAX: Math.PI / 4,
+    DEFAULT_VOLUME: 0,
+    SELECTED_STEM_DEFAULT_VOLUME: 0.35,
 
     // MediaPipe model
     MODEL_PATH: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
@@ -82,5 +63,6 @@ export const CONFIG = {
         PINKY_TIP: 20,
     },
 
-    FINGERTIPS: [8, 12, 16, 20],
+    // All fingertips including thumb
+    FINGERTIPS: [4, 8, 12, 16, 20],
 };

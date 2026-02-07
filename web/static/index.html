@@ -11,96 +11,40 @@
     <div id="camera-section">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <div id="hand-status">Show your hands to control</div>
     </div>
 
-    <!-- DJ Booth -->
+    <!-- DJ Booth - Compact bottom bar -->
     <div id="dj-booth">
-        <!-- Deck A -->
-        <div class="deck" id="deck-a">
-            <div class="deck-label">DECK A</div>
-            <div class="turntable">
-                <div class="vinyl" id="vinyl-a">
-                    <div class="vinyl-label" id="track-label-a">TRACK 1</div>
-                    <div class="vinyl-dot"></div>
-                </div>
+        <div class="dj-info">
+            <div class="track-display">
+                <span class="label">TRACK</span>
+                <span class="value" id="track-name">track1</span>
             </div>
-            <div class="track-type" id="track-type-a">STEMS</div>
-            <div class="deck-controls">
-                <div class="knob-container">
-                    <div class="knob" id="knob-vol-a">
-                        <div class="knob-indicator"></div>
-                    </div>
-                    <div class="knob-label">VOLUME</div>
-                    <div class="knob-value" id="vol-a-value">70%</div>
-                </div>
-                <button class="play-btn" id="play-a">PLAY</button>
+            <div class="stem-display">
+                <span class="label">STEM</span>
+                <span class="value" id="stem-number">--</span>
+            </div>
+            <div class="status-display">
+                <span class="label">STATUS</span>
+                <span class="value" id="play-status">IDLE</span>
+            </div>
+            <div class="volume-display">
+                <span class="label">VOL</span>
+                <span class="value" id="volume-value">0%</span>
             </div>
         </div>
-
-        <!-- Mixer + Effects -->
-        <div id="mixer">
-            <div class="mixer-section">
-                <div class="crossfader-container">
-                    <div class="crossfader-label">CROSSFADER</div>
-                    <div class="crossfader-track">
-                        <div class="crossfader-knob" id="crossfader"></div>
-                    </div>
-                    <div class="crossfader-labels">
-                        <span>A</span>
-                        <span>B</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mixer-section">
-                <div class="knob-container">
-                    <div class="knob filter-knob" id="knob-filter">
-                        <div class="knob-indicator"></div>
-                    </div>
-                    <div class="knob-label">FILTER</div>
-                    <div class="knob-value" id="filter-value">20kHz</div>
-                </div>
-            </div>
-
-            <div class="effects-section">
-                <div class="effects-label">EFFECTS (1-3 fingers)</div>
-                <div class="effects-row">
-                    <button class="effect-btn" id="fx-1">FX1</button>
-                    <button class="effect-btn" id="fx-2">FX2</button>
-                    <button class="effect-btn" id="fx-3">FX3</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Deck B -->
-        <div class="deck" id="deck-b">
-            <div class="deck-label">DECK B</div>
-            <div class="turntable">
-                <div class="vinyl" id="vinyl-b">
-                    <div class="vinyl-label" id="track-label-b">TRACK 2</div>
-                    <div class="vinyl-dot"></div>
-                </div>
-            </div>
-            <div class="track-type" id="track-type-b">SINGLE</div>
-            <div class="deck-controls">
-                <div class="knob-container">
-                    <div class="knob" id="knob-vol-b">
-                        <div class="knob-indicator"></div>
-                    </div>
-                    <div class="knob-label">VOLUME</div>
-                    <div class="knob-value" id="vol-b-value">70%</div>
-                </div>
-                <button class="play-btn" id="play-b">PLAY</button>
-            </div>
+        <div class="stem-indicators">
+            <div class="stem-dot" id="stem-1">1</div>
+            <div class="stem-dot" id="stem-2">2</div>
+            <div class="stem-dot" id="stem-3">3</div>
         </div>
     </div>
-
-    <!-- Gesture hints -->
     <div id="gesture-hints">
-        <div class="hint">FIST = Play/Pause</div>
-        <div class="hint">PINCH+DRAG = Adjust</div>
-        <div class="hint">FLICK WRIST = Switch Track</div>
+        <div class="hint" id="hint-stem">Right hand only: hold 1-3 fingers = select stem</div>
+        <div class="hint" id="hint-fist">Fist = play/pause</div>
+        <div class="hint" id="hint-volume">Pinch + lift = selected stem volume</div>
+        <div class="hint" id="hint-wave">Wave = next track</div>
+        <div class="hint-status" id="gesture-status">Show your hand</div>
     </div>
 
     <!-- Start overlay -->

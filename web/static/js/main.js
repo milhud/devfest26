@@ -33,20 +33,6 @@ class DJBoothApp {
             this.retryBtn.addEventListener('click', () => this.start());
         }
 
-        // Play buttons
-        const playA = document.getElementById('play-a');
-        const playB = document.getElementById('play-b');
-        if (playA) playA.addEventListener('click', () => this.audioEngine.togglePlayPause('left'));
-        if (playB) playB.addEventListener('click', () => this.audioEngine.togglePlayPause('right'));
-
-        // Effect buttons
-        const fx1 = document.getElementById('fx-1');
-        const fx2 = document.getElementById('fx-2');
-        const fx3 = document.getElementById('fx-3');
-        if (fx1) fx1.addEventListener('click', () => this.audioEngine.playEffect(0));
-        if (fx2) fx2.addEventListener('click', () => this.audioEngine.playEffect(1));
-        if (fx3) fx3.addEventListener('click', () => this.audioEngine.playEffect(2));
-
         this.video.addEventListener('loadedmetadata', () => this.uiRenderer.resize());
         window.addEventListener('resize', () => this.uiRenderer.resize());
 
@@ -98,15 +84,17 @@ class DJBoothApp {
         try {
             const hands = this.handTracker.processFrame(this.video, timestamp);
             const gestureState = this.djController.processGestures(hands, timestamp);
+            const audioState = this.audioEngine.getState();
 
-            const deckInfo = {
-                left: this.audioEngine.getDeckInfo('left'),
-                right: this.audioEngine.getDeckInfo('right'),
-            };
+            this.uiRenderer.render(hands, gestureState, audioState);
 
-            this.uiRenderer.render(hands, gestureState, deckInfo);
+            // Debug: log hands detected every second
+            if (!this._lastLog || timestamp - this._lastLog > 1000) {
+                console.log(`Hands: ${hands.length}, Canvas: ${this.canvas.width}x${this.canvas.height}`);
+                this._lastLog = timestamp;
+            }
         } catch (e) {
-            // Continue on errors
+            console.error('Loop error:', e);
         }
 
         requestAnimationFrame(() => this._loop());

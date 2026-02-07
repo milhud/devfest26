@@ -13,6 +13,7 @@ export class HandTracker {
         this.handLandmarker = null;
         this.lastResults = null;
         this.isInitialized = false;
+        this.controlHandLabel = null;
     }
 
     async initialize() {
@@ -98,8 +99,21 @@ export class HandTracker {
                 rollAngle,
             });
         }
+        // Single-hand control mode: lock control to one hand label.
+        if (hands.length === 0) return hands;
 
-        return hands;
+        if (!this.controlHandLabel) {
+            const preferred = hands.find(h => h.handedness === CONFIG.CONTROL_HAND);
+            const chosen = preferred || hands[0];
+            this.controlHandLabel = chosen.handedness;
+            return [chosen];
+        }
+
+        const tracked = hands.find(h => h.handedness === this.controlHandLabel);
+        if (tracked) return [tracked];
+
+        // Fallback if hand label temporarily drops.
+        return [hands[0]];
     }
 
     _detectHandState(landmarks, palmCenter) {
