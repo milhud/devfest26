@@ -1,0 +1,484 @@
+/* DJ Booth - Transparent Background */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: transparent;
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Camera Section */
+#camera-section {
+    flex: 1;
+    position: relative;
+    background: rgba(0, 0, 0, 0.3);
+    min-height: 35vh;
+}
+
+#webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0.9;
+}
+
+#overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: scaleX(-1);
+    pointer-events: none;
+    z-index: 2;
+}
+
+#hand-status {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    color: #00ff88;
+    z-index: 10;
+    backdrop-filter: blur(5px);
+}
+
+/* DJ Booth */
+#dj-booth {
+    height: 50vh;
+    min-height: 280px;
+    background: linear-gradient(180deg, rgba(22, 33, 62, 0.95) 0%, rgba(15, 15, 35, 0.98) 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-top: 2px solid #ff6b35;
+    backdrop-filter: blur(10px);
+}
+
+/* Decks */
+.deck {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.deck-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ff6b35;
+    letter-spacing: 3px;
+}
+
+/* Turntable */
+.turntable {
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle, #1a1a2e 0%, #0a0a15 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        0 0 0 3px #333,
+        0 0 15px rgba(255, 107, 53, 0.2),
+        inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.vinyl {
+    width: 100px;
+    height: 100px;
+    background: repeating-radial-gradient(
+        circle at center,
+        #1a1a1a 0px,
+        #1a1a1a 2px,
+        #222 2px,
+        #222 4px
+    );
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.vinyl.playing {
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.vinyl-label {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #ff6b35, #ff3250);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7px;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.vinyl-dot {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: #fff;
+    border-radius: 50%;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.track-type {
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 1px;
+    background: rgba(255, 107, 53, 0.1);
+    padding: 2px 8px;
+    border-radius: 3px;
+}
+
+/* Deck Controls */
+.deck-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Knobs */
+.knob-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+.knob {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
+    border-radius: 50%;
+    position: relative;
+    box-shadow:
+        0 3px 6px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border: 2px solid #333;
+}
+
+.knob-indicator {
+    position: absolute;
+    width: 3px;
+    height: 12px;
+    background: #ff6b35;
+    border-radius: 2px;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    transform-origin: center 16px;
+}
+
+.knob-label {
+    font-size: 8px;
+    color: #666;
+    letter-spacing: 1px;
+}
+
+.knob-value {
+    font-size: 10px;
+    color: #ff6b35;
+    font-weight: 700;
+}
+
+/* Play Button */
+.play-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 2px solid #444;
+    background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
+    color: #666;
+    font-size: 9px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.play-btn:hover {
+    border-color: #ff6b35;
+    color: #ff6b35;
+}
+
+.play-btn.playing {
+    background: linear-gradient(145deg, #ff6b35, #ff3250);
+    border-color: #ff6b35;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(255, 107, 53, 0.5);
+}
+
+/* Mixer */
+#mixer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    padding: 0 20px;
+}
+
+.mixer-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Crossfader */
+.crossfader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.crossfader-label {
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 1px;
+}
+
+.crossfader-track {
+    width: 150px;
+    height: 10px;
+    background: #0a0a15;
+    border-radius: 5px;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.crossfader-knob {
+    position: absolute;
+    width: 24px;
+    height: 16px;
+    background: linear-gradient(180deg, #ff6b35, #ff3250);
+    border-radius: 3px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.4);
+    transition: left 0.05s ease-out;
+}
+
+.crossfader-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 150px;
+    font-size: 10px;
+    color: #555;
+}
+
+/* Filter Knob */
+.filter-knob {
+    width: 50px;
+    height: 50px;
+}
+
+.filter-knob .knob-indicator {
+    height: 15px;
+    transform-origin: center 20px;
+}
+
+/* Effects */
+.effects-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.effects-label {
+    font-size: 8px;
+    color: #555;
+    letter-spacing: 1px;
+}
+
+.effects-row {
+    display: flex;
+    gap: 8px;
+}
+
+.effect-btn {
+    width: 40px;
+    height: 30px;
+    border: 1px solid #444;
+    background: linear-gradient(145deg, #2a2a3e, #1a1a2e);
+    color: #666;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+}
+
+.effect-btn:hover {
+    border-color: #00d4ff;
+    color: #00d4ff;
+}
+
+.effect-btn.active {
+    background: #00d4ff;
+    color: #000;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+/* Gesture Hints */
+#gesture-hints {
+    position: fixed;
+    bottom: 52vh;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 5;
+}
+
+.hint {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #888;
+    backdrop-filter: blur(5px);
+}
+
+/* Overlays */
+#start-overlay, #loading-overlay, #error-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 10, 20, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+#start-btn {
+    padding: 18px 45px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #ff6b35, #ff3250);
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#start-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 35px rgba(255, 107, 53, 0.6);
+}
+
+.start-hint {
+    margin-top: 12px;
+    color: #555;
+    font-size: 13px;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 107, 53, 0.2);
+    border-top-color: #ff6b35;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+#loading-overlay p, #error-overlay p {
+    margin-top: 15px;
+    color: #666;
+}
+
+#error-message {
+    color: #ff3250;
+}
+
+#retry-btn {
+    margin-top: 10px;
+    padding: 8px 25px;
+    background: rgba(255, 107, 53, 0.2);
+    border: 1px solid #ff6b35;
+    color: #fff;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+    #dj-booth {
+        padding: 10px;
+        height: 55vh;
+    }
+
+    .turntable {
+        width: 90px;
+        height: 90px;
+    }
+
+    .vinyl {
+        width: 75px;
+        height: 75px;
+    }
+
+    .vinyl-label {
+        width: 30px;
+        height: 30px;
+        font-size: 6px;
+    }
+
+    .knob {
+        width: 35px;
+        height: 35px;
+    }
+
+    .play-btn {
+        width: 40px;
+        height: 40px;
+    }
+
+    .crossfader-track {
+        width: 100px;
+    }
+
+    #mixer {
+        padding: 0 10px;
+    }
+
+    #gesture-hints {
+        display: none;
+    }
+}
