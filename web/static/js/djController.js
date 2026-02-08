@@ -15,7 +15,8 @@ export class DJController {
     }
 
     processGestures(hands, timestamp) {
-        const controlHands = hands.length > 0 ? [hands[0]] : [];
+        const controlHand = hands.find((h) => h.handedness === CONFIG.CONTROL_HAND) || null;
+        const controlHands = controlHand ? [controlHand] : [];
         const gestureState = this.gestureDetector.update(controlHands, timestamp);
         gestureState.effectTrigger = 0;
         this.lastGestureState = gestureState;
@@ -45,7 +46,7 @@ export class DJController {
         }
 
         // Effects: second hand maps finger count 1..3 to effect1..3
-        const effectHand = hands.length > 1 ? hands[1] : null;
+        const effectHand = hands.find((h) => h.handedness === CONFIG.EFFECT_HAND) || null;
         if (!effectHand) {
             this.lastEffectFinger = 0;
             return gestureState;

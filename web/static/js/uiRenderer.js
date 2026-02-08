@@ -10,6 +10,7 @@ export class UIRenderer {
         this.ctx = canvas.getContext('2d');
         this.video = video;
         this.statusMessage = 'Show your hand';
+        this.meterLevels = [0, 0, 0];
 
         // DOM elements
         this.elements = {
@@ -42,6 +43,12 @@ export class UIRenderer {
                 document.getElementById('mix-val-2'),
                 document.getElementById('mix-val-3'),
             ],
+            mixMeters: [
+                document.getElementById('mix-meter-1'),
+                document.getElementById('mix-meter-2'),
+                document.getElementById('mix-meter-3'),
+            ],
+            mixScopeBars: Array.from(document.querySelectorAll('#mix-scope .mix-scope-bar')),
             trackRows: [
                 document.getElementById('track-row-0'),
                 document.getElementById('track-row-1'),
@@ -228,15 +235,40 @@ export class UIRenderer {
             const knob = this.elements.mixKnobs[i];
             const card = this.elements.mixCards[i];
             const val = this.elements.mixVals[i];
+            const meter = this.elements.mixMeters[i];
             const stemVolume = (audioState.stemVolumes && audioState.stemVolumes[i]) || 0;
+            const now = performance.now() * 0.01;
+            const wobble = audioState.isPlaying && stemVolume > 0.02
+                ? (0.12 * Math.sin(now * (1.1 + i * 0.2) + i) + 0.08 * Math.sin(now * 2.2 + i * 2))
+                : 0;
+            const targetLevel = clamp01(stemVolume + wobble);
+            this.meterLevels[i] = this.meterLevels[i] * 0.82 + targetLevel * 0.18;
+
             if (knob) {
                 knob.style.setProperty('--mix-angle', `${Math.round(stemVolume * 360)}deg`);
             }
             if (val) {
                 val.textContent = `${Math.round(stemVolume * 100)}%`;
             }
+            if (meter) {
+                meter.style.transform = `scaleX(${Math.max(0.02, this.meterLevels[i]).toFixed(3)})`;
+            }
             if (card) {
                 card.classList.toggle('selected', audioState.selectedStem === i);
+            }
+        }
+
+        const scopeBars = this.elements.mixScopeBars || [];
+        if (scopeBars.length > 0) {
+            const avgLevel = (this.meterLevels[0] + this.meterLevels[1] + this.meterLevels[2]) / 3;
+            const t = performance.now() * 0.012;
+            for (let i = 0; i < scopeBars.length; i++) {
+                const bar = scopeBars[i];
+                const wave = Math.abs(Math.sin(t + i * 0.45) * Math.cos((t * 0.7) + i * 0.2));
+                const base = audioState.isPlaying ? 0.08 : 0.04;
+                const level = clamp01(base + avgLevel * (0.4 + wave * 0.9));
+                bar.style.transform = `scaleY(${Math.max(0.06, level).toFixed(3)})`;
+                bar.style.opacity = `${0.4 + level * 0.6}`;
             }
         }
 
@@ -250,12 +282,12 @@ export class UIRenderer {
         if (gestureState) {
             const hasHand = gestureState.handDetected;
             const isSelecting = hasHand && gestureState.fingerCount >= 1 && gestureState.fingerCount <= CONFIG.STEMS_PER_TRACK;
-            const isFist = hasHand && gestureState.isFist;
+            const isPlayPauseGesture = hasHand && gestureState.isPlayPauseGesture;
             const isWave = gestureState.trackSwitch;
             const isPinching = !!gestureState.isPinching;
 
             if (this.elements.hintStem) this.elements.hintStem.classList.toggle('active', isSelecting);
-            if (this.elements.hintFist) this.elements.hintFist.classList.toggle('active', isFist);
+            if (this.elements.hintFist) this.elements.hintFist.classList.toggle('active', isPlayPauseGesture);
             if (this.elements.hintVolume) this.elements.hintVolume.classList.toggle('active', isPinching);
             if (this.elements.hintWave) this.elements.hintWave.classList.toggle('active', isWave);
 
@@ -291,4 +323,10 @@ export class UIRenderer {
 
         return statusMessage;
     }
+}
+
+function clamp01(value) {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
 }

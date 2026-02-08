@@ -1,7 +1,7 @@
 /**
  * Gesture detection for stem-based DJ control.
  * - Hold 1-N fingers = select stem 1-N
- * - Fist (0 fingers) = play/pause
+ * - Hold open palm = play/pause
  * - Pinch height = volume
  * - Wave = switch track
  */
@@ -21,8 +21,9 @@ export class GestureDetector {
         this.lastCommittedFinger = -1;
         this.stemSelectLockUntil = 0;
 
-        // Play/pause tracking (fist transition)
-        this.wasFist = false;
+        // Play/pause tracking (open-palm hold)
+        this.openHoldStartTime = 0;
+        this.openHoldTriggered = false;
         this.lastPlayPauseTime = 0;
 
         // Wave detection
@@ -47,6 +48,7 @@ export class GestureDetector {
             handDetected: false,
             isFist: false,
             isOpen: false,
+            isPlayPauseGesture: false,
             isPinching: false,
             stemSelectionLocked: false,
             stemSelectionLockRemainingMs: 0,
@@ -101,14 +103,27 @@ export class GestureDetector {
             state.stemSelectionLockRemainingMs = CONFIG.STEM_SELECT_LOCK_MS;
         }
 
-        // Play/pause: detect transition into a fist
-        if (!this.wasFist && state.isFist) {
-            if (timestamp - this.lastPlayPauseTime > CONFIG.PLAY_PAUSE_DEBOUNCE_MS) {
+        // Play/pause: hold open palm to toggle
+        const openPalmForPause = state.isOpen && !state.isPinching;
+        if (openPalmForPause) {
+            state.isPlayPauseGesture = true;
+            if (this.openHoldStartTime === 0) {
+                this.openHoldStartTime = timestamp;
+            }
+            const holdElapsed = timestamp - this.openHoldStartTime;
+            if (
+                !this.openHoldTriggered &&
+                holdElapsed >= CONFIG.PLAY_PAUSE_HOLD_MS &&
+                timestamp - this.lastPlayPauseTime >= CONFIG.PLAY_PAUSE_DEBOUNCE_MS
+            ) {
                 state.playPause = true;
                 this.lastPlayPauseTime = timestamp;
+                this.openHoldTriggered = true;
             }
+        } else {
+            this.openHoldStartTime = 0;
+            this.openHoldTriggered = false;
         }
-        this.wasFist = state.isFist;
 
         // Volume based on pinch height (higher = louder)
         if (hand.isPinching) {
@@ -155,6 +170,20 @@ export class GestureDetector {
         if (this.lastX !== null) {
             const dx = x - this.lastX;
 
+            // Single-direction flick trigger (more reliable than direction-change-only wave)
+            if (
+                Math.abs(dx) > CONFIG.FLICK_VELOCITY_THRESHOLD &&
+                timestamp - this.lastWaveTime > CONFIG.TRACK_SWITCH_DEBOUNCE_MS
+            ) {
+                state.trackSwitch = true;
+                this.lastWaveTime = timestamp;
+                this.waveCount = 0;
+                this.waveDirection = dx > 0 ? 1 : -1;
+                this.lastX = x;
+                this.lastWaveMotionTime = timestamp;
+                return;
+            }
+
             // Detect direction change
             if (Math.abs(dx) > CONFIG.WAVE_VELOCITY_THRESHOLD) {
                 this.lastWaveMotionTime = timestamp;
@@ -193,7 +222,8 @@ export class GestureDetector {
         this.fingerCandidateStart = 0;
         this.lastCommittedFinger = -1;
         this.stemSelectLockUntil = 0;
-        this.wasFist = false;
+        this.openHoldStartTime = 0;
+        this.openHoldTriggered = false;
         this.lastPlayPauseTime = 0;
         this.lastX = null;
         this.waveCount = 0;

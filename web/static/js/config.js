@@ -25,14 +25,17 @@ export const CONFIG = {
     STEM_SELECT_HOLD_MS: 220,
     STEM_SELECT_LOCK_MS: 4000,
     PLAY_PAUSE_DEBOUNCE_MS: 300,
+    PLAY_PAUSE_HOLD_MS: 650,
     TRACK_SWITCH_DEBOUNCE_MS: 600,
     EFFECT_TRIGGER_DEBOUNCE_MS: 350,
 
-    // Control hand (single hand mode)
-    CONTROL_HAND: 'Right',
+    // Hand roles
+    CONTROL_HAND: 'Left',
+    EFFECT_HAND: 'Right',
 
     // Wave detection
     WAVE_VELOCITY_THRESHOLD: 0.03,
+    FLICK_VELOCITY_THRESHOLD: 0.06,
     WAVE_COUNT_THRESHOLD: 1,
     WAVE_TIMEOUT_MS: 800,
 

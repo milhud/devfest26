@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Gesture DJ Booth</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=20260207b">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260207g">
 </head>
 <body>
     <!-- Camera feed -->
@@ -40,11 +40,11 @@
         </div>
     </div>
     <div id="gesture-hints">
-        <div class="hint" id="hint-stem">Right hand only: hold 1-3 fingers = select stem</div>
-        <div class="hint" id="hint-fist">Fist = play/pause</div>
+        <div class="hint" id="hint-stem">Left hand: hold 1-3 fingers = select stem</div>
+        <div class="hint" id="hint-fist">Open palm hold = play/pause</div>
         <div class="hint" id="hint-volume">Pinch + lift = selected stem volume</div>
         <div class="hint" id="hint-wave">Wave = next track</div>
-        <div class="hint">Other hand: 1/2/3 fingers = FX 1/2/3</div>
+        <div class="hint">Right hand: hold 1/2/3 = FX 1/2/3</div>
         <div class="hint-status" id="gesture-status">Show your hand</div>
     </div>
     <div id="mixer-strip">
@@ -53,15 +53,28 @@
             <div class="mix-knob-card selected" id="mix-card-1">
                 <div class="mix-knob" id="mix-knob-1"><span>1</span></div>
                 <div class="mix-knob-val" id="mix-val-1">0%</div>
+                <div class="mix-meter"><div class="mix-meter-fill" id="mix-meter-1"></div></div>
             </div>
             <div class="mix-knob-card" id="mix-card-2">
                 <div class="mix-knob" id="mix-knob-2"><span>2</span></div>
                 <div class="mix-knob-val" id="mix-val-2">0%</div>
+                <div class="mix-meter"><div class="mix-meter-fill" id="mix-meter-2"></div></div>
             </div>
             <div class="mix-knob-card" id="mix-card-3">
                 <div class="mix-knob" id="mix-knob-3"><span>3</span></div>
                 <div class="mix-knob-val" id="mix-val-3">0%</div>
+                <div class="mix-meter"><div class="mix-meter-fill" id="mix-meter-3"></div></div>
             </div>
+        </div>
+        <div class="mix-scope" id="mix-scope">
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
         </div>
         <div class="track-board">
             <div class="track-board-title">TRACK LIST</div>
@@ -95,6 +108,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-    <script type="module" src="/static/js/main.js?v=20260207b"></script>
+    <script type="module" src="/static/js/main.js?v=20260207g"></script>
 </body>
 </html>
