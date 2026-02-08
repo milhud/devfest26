@@ -1,0 +1,484 @@
+/* DJ Booth - Stem Controller */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #000;
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Camera Section - Full screen */
+#camera-section {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    background: #000;
+}
+
+#webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* DJ Booth - Compact bottom bar */
+#dj-booth {
+    background: rgba(0, 0, 0, 0.85);
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #333;
+}
+
+#gesture-hints {
+    background: rgba(5, 5, 10, 0.9);
+    border-top: 1px solid #222;
+    padding: 9px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: #777;
+    letter-spacing: 0.2px;
+}
+
+#gesture-hints .hint {
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+#gesture-hints .hint.active {
+    color: #fff;
+    border-color: #ff6b35;
+    box-shadow: 0 0 8px rgba(255, 107, 53, 0.35);
+}
+
+#gesture-hints .hint-status {
+    margin-left: auto;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+}
+
+.mixer-title,
+.track-board-title {
+    font-size: 10px;
+    letter-spacing: 1.8px;
+    color: #61f7ff;
+    text-transform: uppercase;
+}
+
+#mixer-strip {
+    flex-shrink: 0;
+    background:
+        linear-gradient(180deg, rgba(6, 10, 16, 0.95), rgba(2, 5, 9, 0.95)),
+        repeating-linear-gradient(90deg, rgba(97, 247, 255, 0.06) 0 1px, transparent 1px 16px);
+    border-top: 1px solid rgba(97, 247, 255, 0.25);
+    padding: 8px 14px 10px;
+    display: grid;
+    grid-template-columns: 210px minmax(360px, 1fr) 300px;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        "title scope knobs"
+        "tracks scope knobs";
+    gap: 10px 14px;
+    align-items: center;
+}
+
+.mixer-title {
+    grid-area: title;
+}
+
+.mixer-knobs {
+    grid-area: knobs;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: flex-end;
+}
+
+.mix-knob-card {
+    min-width: 86px;
+    text-align: center;
+    padding: 4px 6px;
+    border: 1px solid rgba(97, 247, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.mix-knob-card.selected {
+    border-color: rgba(255, 107, 53, 0.8);
+    box-shadow: 0 0 16px rgba(255, 107, 53, 0.28);
+}
+
+.mix-knob {
+    --mix-angle: 0deg;
+    position: relative;
+    width: 56px;
+    height: 56px;
+    margin: 3px auto 4px;
+    border-radius: 50%;
+    border: 2px solid rgba(97, 247, 255, 0.95);
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.45) inset,
+        0 0 18px rgba(97, 247, 255, 0.38);
+    background:
+        radial-gradient(circle at center, #091018 40%, transparent 43%),
+        conic-gradient(
+            #61f7ff 0deg,
+            #61f7ff var(--mix-angle),
+            #132635 var(--mix-angle),
+            #132635 360deg
+        );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mix-knob::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 2px;
+    height: 16px;
+    background: #ff8f66;
+    box-shadow: 0 0 6px rgba(255, 143, 102, 0.7);
+    transform-origin: 50% 24px;
+    transform: translateX(-50%) rotate(calc(var(--mix-angle) - 90deg));
+}
+
+.mix-knob span {
+    font-size: 13px;
+    font-weight: 700;
+    color: #d9fbff;
+    text-shadow: 0 0 6px rgba(97, 247, 255, 0.4);
+}
+
+.mix-knob-val {
+    font-size: 12px;
+    color: #9ed9df;
+    font-weight: 700;
+}
+
+.mix-meter {
+    width: 100%;
+    height: 7px;
+    border: 1px solid rgba(97, 247, 255, 0.3);
+    border-radius: 999px;
+    background: rgba(7, 22, 30, 0.9);
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.mix-meter-fill {
+    width: 100%;
+    height: 100%;
+    transform-origin: left center;
+    transform: scaleX(0.02);
+    background: linear-gradient(90deg, #1ad4ff, #00ff88);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.45);
+}
+
+.mix-scope {
+    grid-area: scope;
+    height: 104px;
+    border: 1px solid rgba(97, 247, 255, 0.22);
+    border-radius: 10px;
+    background:
+        linear-gradient(180deg, rgba(7, 19, 27, 0.95), rgba(4, 10, 14, 0.95));
+    display: grid;
+    grid-template-columns: repeat(24, minmax(4px, 1fr));
+    gap: 4px;
+    align-items: end;
+    padding: 8px 8px 6px;
+}
+
+.mix-scope-bar {
+    height: 80%;
+    border-radius: 4px;
+    transform-origin: center bottom;
+    transform: scaleY(0.08);
+    background: linear-gradient(180deg, #7fffff, #24d0ff 50%, #00ff88);
+    opacity: 0.6;
+    box-shadow: 0 0 6px rgba(36, 208, 255, 0.35);
+}
+
+.track-board {
+    grid-area: tracks;
+    border: 1px solid rgba(97, 247, 255, 0.25);
+    border-radius: 8px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.track-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #7fa5af;
+    border-top: 1px solid rgba(97, 247, 255, 0.1);
+    padding: 5px 2px;
+}
+
+.track-row:first-of-type {
+    border-top: none;
+}
+
+.track-row.active {
+    color: #ffffff;
+}
+
+.track-row.active .track-row-state {
+    color: #00ff88;
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+.dj-info {
+    display: flex;
+    gap: 20px;
+}
+
+.track-display,
+.stem-display,
+.status-display,
+.volume-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.dj-info .label {
+    font-size: 10px;
+    color: #666;
+    letter-spacing: 1px;
+}
+
+.dj-info .value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ff6b35;
+}
+
+#stem-number {
+    font-size: 14px;
+}
+
+#play-status.playing {
+    color: #00ff88;
+}
+
+/* Stem indicators */
+.stem-indicators {
+    display: flex;
+    gap: 8px;
+}
+
+.stem-dot {
+    --knob-angle: 0deg;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at center, #0e0e14 52%, transparent 54%),
+        conic-gradient(#ff6b35 var(--knob-angle), #222 0deg);
+    border: 2px solid #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #666;
+    transition: all 0.15s;
+}
+
+.stem-dot.active {
+    border-color: #ff6b35;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+}
+
+.stem-dot.selected {
+    border-color: #00ffff;
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.6);
+}
+
+.stem-dot.playing {
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(255, 107, 53, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(255, 107, 53, 0.8); }
+}
+
+/* Overlays */
+#start-overlay, #loading-overlay, #error-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 10, 20, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+#start-btn {
+    padding: 18px 45px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #ff6b35, #ff3250);
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#start-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 35px rgba(255, 107, 53, 0.6);
+}
+
+.start-hint {
+    margin-top: 12px;
+    color: #555;
+    font-size: 13px;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 107, 53, 0.2);
+    border-top-color: #ff6b35;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+#loading-overlay p, #error-overlay p {
+    margin-top: 15px;
+    color: #666;
+}
+
+#error-message {
+    color: #ff3250;
+}
+
+#retry-btn {
+    margin-top: 10px;
+    padding: 8px 25px;
+    background: rgba(255, 107, 53, 0.2);
+    border: 1px solid #ff6b35;
+    color: #fff;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+    #dj-booth {
+        padding: 8px 12px;
+    }
+
+    .dj-info {
+        gap: 12px;
+    }
+
+    .dj-info .label {
+        font-size: 8px;
+    }
+
+    .dj-info .value {
+        font-size: 13px;
+    }
+
+    .stem-dot {
+        width: 28px;
+        height: 28px;
+        font-size: 10px;
+    }
+
+    #gesture-hints {
+        padding: 7px 10px;
+        gap: 8px;
+        font-size: 10px;
+    }
+
+    #gesture-hints .hint-status {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 2px;
+    }
+
+    #mixer-strip {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+        grid-template-areas:
+            "title"
+            "scope"
+            "knobs"
+            "tracks";
+        gap: 8px;
+        padding: 8px 10px 9px;
+    }
+
+    .mixer-knobs {
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .mix-knob-card {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .mix-knob {
+        width: 46px;
+        height: 46px;
+    }
+
+    .track-board {
+        width: 100%;
+    }
+
+    .mix-scope {
+        height: 52px;
+        padding: 7px 7px 6px;
+        gap: 3px;
+    }
+}

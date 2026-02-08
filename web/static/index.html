@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gesture DJ Booth</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260207g">
+</head>
+<body>
+    <!-- Camera feed -->
+    <div id="camera-section">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <!-- DJ Booth - Compact bottom bar -->
+    <div id="dj-booth">
+        <div class="dj-info">
+            <div class="track-display">
+                <span class="label">TRACK</span>
+                <span class="value" id="track-name">track1</span>
+            </div>
+            <div class="stem-display">
+                <span class="label">STEM</span>
+                <span class="value" id="stem-number">--</span>
+            </div>
+            <div class="status-display">
+                <span class="label">STATUS</span>
+                <span class="value" id="play-status">IDLE</span>
+            </div>
+            <div class="volume-display">
+                <span class="label">VOL</span>
+                <span class="value" id="volume-value">0%</span>
+            </div>
+        </div>
+        <div class="stem-indicators">
+            <div class="stem-dot" id="stem-1">1</div>
+            <div class="stem-dot" id="stem-2">2</div>
+            <div class="stem-dot" id="stem-3">3</div>
+        </div>
+    </div>
+    <div id="gesture-hints">
+        <div class="hint" id="hint-stem">Left hand: hold 1-3 fingers = select stem</div>
+        <div class="hint" id="hint-fist">Open palm hold = play/pause</div>
+        <div class="hint" id="hint-volume">Pinch + lift = selected stem volume</div>
+        <div class="hint" id="hint-wave">Wave = next track</div>
+        <div class="hint">Right hand: hold 1/2/3 = FX 1/2/3</div>
+        <div class="hint-status" id="gesture-status">Show your hand</div>
+    </div>
+    <div id="mixer-strip">
+        <div class="mixer-title">LIVE STEM MIXER</div>
+        <div class="mixer-knobs">
+            <div class="mix-knob-card selected" id="mix-card-1">
+                <div class="mix-knob" id="mix-knob-1"><span>1</span></div>
+                <div class="mix-knob-val" id="mix-val-1">0%</div>
+                <div class="mix-meter"><div class="mix-meter-fill" id="mix-meter-1"></div></div>
+            </div>
+            <div class="mix-knob-card" id="mix-card-2">
+                <div class="mix-knob" id="mix-knob-2"><span>2</span></div>
+                <div class="mix-knob-val" id="mix-val-2">0%</div>
+                <div class="mix-meter"><div class="mix-meter-fill" id="mix-meter-2"></div></div>
+            </div>
+            <div class="mix-knob-card" id="mix-card-3">
+                <div class="mix-knob" id="mix-knob-3"><span>3</span></div>
+                <div class="mix-knob-val" id="mix-val-3">0%</div>
+                <div class="mix-meter"><div class="mix-meter-fill" id="mix-meter-3"></div></div>
+            </div>
+        </div>
+        <div class="mix-scope" id="mix-scope">
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+            <span class="mix-scope-bar"></span><span class="mix-scope-bar"></span><span class="mix-scope-bar"></span>
+        </div>
+        <div class="track-board">
+            <div class="track-board-title">TRACK LIST</div>
+            <div class="track-row active" id="track-row-0">
+                <span class="track-row-name">TRACK1</span>
+                <span class="track-row-state">LIVE</span>
+            </div>
+            <div class="track-row" id="track-row-1">
+                <span class="track-row-name">TRACK2</span>
+                <span class="track-row-state">READY</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start overlay -->
+    <div id="start-overlay">
+        <button id="start-btn">START DJ BOOTH</button>
+        <p class="start-hint">Uses camera for hand gestures</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="error-overlay" style="display: none;">
+        <p id="error-message"></p>
+        <button id="retry-btn">Retry</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script type="module" src="/static/js/main.js?v=20260207g"></script>
+</body>
+</html>
