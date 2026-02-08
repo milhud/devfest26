@@ -17,11 +17,13 @@
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
     "@types/adm-zip": "^0.5.7",
+    "@types/three": "^0.182.0",
     "adm-zip": "^0.5.16",
     "next": "16.1.6",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "three": "^0.182.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0"
   },

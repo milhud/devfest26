@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
   console.log(`[middleware] ${pathname} — user: ${user?.id ?? 'NONE'}`)
 
   // Public routes that don't require auth
-  const publicRoutes = ['/login', '/auth/callback']
+  const publicRoutes = ['/login', '/auth/callback', '/projector']
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   )

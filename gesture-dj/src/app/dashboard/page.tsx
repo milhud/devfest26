@@ -272,7 +272,7 @@ function DashboardContent() {
 
     const connect = () => {
       try {
-        ws = new WebSocket('ws://localhost:8080?type=dashboard');
+        ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'}?type=dashboard`);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -615,7 +615,7 @@ function DashboardContent() {
                   <div className="relative z-10 flex flex-col items-center justify-center h-full gap-2">
                     <IconCamera className="w-7 h-7 text-gray-600" />
                     <button
-                      onClick={() => window.open('http://localhost:8000', 'dj-booth', 'width=1280,height=800')}
+                      onClick={() => window.open(process.env.NEXT_PUBLIC_DJ_BOOTH_URL || 'http://localhost:8000', 'dj-booth', 'width=1280,height=800')}
                       className="px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-bold tracking-wider hover:bg-purple-500/25 transition-colors cursor-pointer"
                     >
                       LAUNCH DJ BOOTH
@@ -627,11 +627,17 @@ function DashboardContent() {
               <div className="min-h-[140px] lg:min-h-[160px] glass rounded-xl flex items-center justify-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/5 to-transparent" />
                 <div className="relative z-10 text-center">
-                  <IconCube className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <span className="text-gray-600 text-[10px] tracking-[0.15em] font-bold uppercase">3D Visualization</span>
+                  <IconCube className="w-8 h-8 text-cyan-500/60 mx-auto mb-2" />
+                  <button
+                    onClick={() => window.open('/projector', 'projector-viz', 'width=1920,height=1080')}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold tracking-wider hover:bg-cyan-500/25 transition-colors cursor-pointer"
+                  >
+                    LAUNCH 3D VISUALS
+                  </button>
+                  <span className="block text-gray-600 text-[9px] mt-1">Opens in new window</span>
                 </div>
                 <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/30 text-[9px] text-gray-500 font-medium">
-                  <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/50" />
                   Stream B
                 </div>
               </div>
