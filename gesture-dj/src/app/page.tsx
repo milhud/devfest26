@@ -59,8 +59,13 @@ export default async function Home() {
           >
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative z-10">
-              <div className="w-14 h-14 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center text-3xl mb-3 group-hover:scale-110 transition-transform">
-                📊
+              <div className="w-14 h-14 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <svg className="w-7 h-7 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
               </div>
               <div className="font-bold text-lg mb-1">Dashboard</div>
               <div className="text-gray-500 text-xs">Presentation view</div>
@@ -74,8 +79,11 @@ export default async function Home() {
           >
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-pink-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative z-10">
-              <div className="w-14 h-14 mx-auto rounded-xl bg-pink-500/10 flex items-center justify-center text-3xl mb-3 group-hover:scale-110 transition-transform">
-                🗳️
+              <div className="w-14 h-14 mx-auto rounded-xl bg-pink-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <svg className="w-7 h-7 text-pink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2c.5 2.5 2 4.5 2 7a4 4 0 1 1-8 0c0-2.5 2-4 3-6 1 2 2.5 3 3 5s1-3 0-6z" fill="currentColor" fillOpacity="0.1" />
+                  <path d="M12 2c.5 2.5 2 4.5 2 7a4 4 0 1 1-8 0c0-2.5 2-4 3-6 1 2 2.5 3 3 5s1-3 0-6z" />
+                </svg>
               </div>
               <div className="font-bold text-lg mb-1">Vote</div>
               <div className="text-gray-500 text-xs">Audience mobile voting</div>
@@ -89,8 +97,10 @@ export default async function Home() {
           >
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative z-10">
-              <div className="w-14 h-14 mx-auto rounded-xl bg-cyan-500/10 flex items-center justify-center text-3xl mb-3 group-hover:scale-110 transition-transform">
-                ⚡
+              <div className="w-14 h-14 mx-auto rounded-xl bg-cyan-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <svg className="w-7 h-7 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" fillOpacity="0.1" />
+                </svg>
               </div>
               <div className="font-bold text-lg mb-1">API</div>
               <div className="text-gray-500 text-xs">Vote + Agent endpoints</div>

@@ -13,6 +13,18 @@ const VALID_VOTE_TYPES: VoteType[] = [
   'speed_down',
 ];
 
+// Server-side rate limiting: 1 vote per second per userId
+const RATE_LIMIT_MS = 1000;
+const lastVoteTime = new Map<string, number>();
+
+// Clean up stale entries every 60s to prevent memory leak
+setInterval(() => {
+  const cutoff = Date.now() - 60_000;
+  for (const [key, ts] of lastVoteTime) {
+    if (ts < cutoff) lastVoteTime.delete(key);
+  }
+}, 60_000);
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -31,6 +43,17 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Rate limit check
+    const now = Date.now();
+    const lastTime = lastVoteTime.get(userId);
+    if (lastTime && now - lastTime < RATE_LIMIT_MS) {
+      return NextResponse.json(
+        { error: 'Too fast — wait a moment between votes' },
+        { status: 429 }
+      );
+    }
+    lastVoteTime.set(userId, now);
 
     const vote: Vote = {
       id: uuidv4(),
