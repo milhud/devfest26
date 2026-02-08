@@ -8,12 +8,16 @@
     "start": "next start",
     "lint": "eslint",
     "ws-server": "tsx server/ws-server.ts",
-    "agent": "python3 agent/dj_agent.py"
+    "agent": "python3 agent/dj_agent.py",
+    "music-consumer": "tsx --env-file=.env.local server/elevenlabs-consumer.ts",
+    "test-music": "tsx --env-file=.env.local server/test-music-consumer.ts"
   },
   "dependencies": {
     "@flowglad/nextjs": "^0.18.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
+    "@types/adm-zip": "^0.5.7",
+    "adm-zip": "^0.5.16",
     "next": "16.1.6",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",

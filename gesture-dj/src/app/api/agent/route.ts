@@ -40,3 +40,9 @@ export async function GET() {
     totalDecisions: decisionHistory.length,
   });
 }
+
+export async function DELETE() {
+  latestDecision = null;
+  decisionHistory = [];
+  return NextResponse.json({ success: true, message: 'Agent decisions cleared' });
+}

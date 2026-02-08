@@ -290,6 +290,26 @@ function DashboardContent() {
               if (staleTimer) clearTimeout(staleTimer);
               staleTimer = setTimeout(() => setDjBoothConnected(false), 3000);
             }
+            // Real-time agent decisions via WS
+            if (msg.source === 'agent' && msg.type === 'agent_decision' && msg.data) {
+              const wsDecision: AgentDecision = {
+                reasoning: msg.data.actions?.map((a: { type: string }) => a.type).join(', ') || '',
+                actions: msg.data.actions || [],
+                confidence: 0,
+                audioState: msg.data.audioState || {},
+                timestamp: msg.timestamp || Date.now(),
+              };
+              setAgentData((prev) => ({
+                latestDecision: wsDecision,
+                recentDecisions: [...prev.recentDecisions.slice(-4), wsDecision],
+                totalDecisions: prev.totalDecisions + 1,
+              }));
+            }
+            // Real-time vote updates via WS
+            if (msg.source === 'votes' && msg.type === 'vote_cast' && msg.data) {
+              if (msg.data.aggregation) setAggregation(msg.data.aggregation);
+              if (msg.data.vote) setRecentVotes((prev) => prev.some((v) => v.id === msg.data.vote.id) ? prev : [...prev.slice(-19), msg.data.vote]);
+            }
           } catch { /* ignore parse errors */ }
         };
 
@@ -373,7 +393,7 @@ function DashboardContent() {
       )}
 
       {/* Content */}
-      <div className="relative z-10 p-4 lg:p-5 flex flex-col h-screen overflow-hidden">
+      <div className="relative z-10 p-4 lg:p-5 flex flex-col min-h-screen lg:h-screen lg:overflow-hidden">
         {/* Header */}
         <header className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-4">
@@ -433,9 +453,9 @@ function DashboardContent() {
           </div>
         </header>
 
-        <div className="grid grid-cols-12 gap-3 lg:gap-4 flex-1">
+        <div className="grid grid-cols-12 gap-3 lg:gap-4 flex-1 lg:min-h-0">
           {/* ── Left Column ── */}
-          <div className="col-span-12 lg:col-span-3 space-y-3 flex flex-col">
+          <div className="col-span-12 lg:col-span-3 space-y-3 flex flex-col lg:overflow-y-auto lg:min-h-0 scrollbar-thin">
             <Panel title="AUDIO STATE" accent="purple">
               <div className="space-y-0.5">
                 <ParamRow label="Genre" value={String(audioState?.genre || 'house')} color="text-purple-300" />
@@ -526,7 +546,7 @@ function DashboardContent() {
           </div>
 
           {/* ── Center Column ── */}
-          <div className="col-span-12 lg:col-span-6 space-y-3 flex flex-col">
+          <div className="col-span-12 lg:col-span-6 space-y-3 flex flex-col lg:overflow-y-auto lg:min-h-0 scrollbar-thin">
             <div className="grid grid-cols-2 gap-3">
               <div className="min-h-[140px] lg:min-h-[160px] glass rounded-xl flex flex-col relative overflow-hidden group p-3">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-transparent" />
@@ -701,11 +721,20 @@ function DashboardContent() {
             )}
 
             {/* Music Generation Queue */}
-            <Panel title="MUSIC QUEUE" accent="cyan">
+            <Panel title="MUSIC QUEUE" accent="cyan" headerRight={
+              musicQueue.total > 0 ? (
+                <button
+                  onClick={async () => { await fetch('/api/music-queue', { method: 'DELETE' }); setMusicQueue({ queue: [], queued: 0, generating: 0, ready: 0, total: 0 }); }}
+                  className="text-[9px] text-gray-600 hover:text-red-400 transition-colors cursor-pointer px-1.5 py-0.5 rounded bg-white/[0.03] border border-white/5"
+                >
+                  Clear
+                </button>
+              ) : undefined
+            }>
               {musicQueue.total > 0 ? (
                 <div className="space-y-2">
                   {/* Status summary */}
-                  <div className="flex items-center gap-3 text-[10px] mb-2">
+                  <div className="flex items-center gap-3 text-[10px] mb-1">
                     {musicQueue.queued > 0 && (
                       <span className="flex items-center gap-1 text-gray-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
@@ -726,6 +755,7 @@ function DashboardContent() {
                     )}
                   </div>
                   {/* Queue items */}
+                  <div className="max-h-[200px] overflow-y-auto scrollbar-thin space-y-2">
                   {musicQueue.queue.slice(-5).reverse().map((item) => {
                     const statusStyle = QUEUE_STATUS_STYLES[item.status] || QUEUE_STATUS_STYLES.queued;
                     return (
@@ -746,6 +776,7 @@ function DashboardContent() {
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-3">
@@ -781,8 +812,17 @@ function DashboardContent() {
           </div>
 
           {/* ── Right Column ── */}
-          <div className="col-span-12 lg:col-span-3 space-y-3 flex flex-col">
-            <Panel title="AI DJ BRAIN" accent="purple" className="flex-1 max-h-[40vh] overflow-y-auto">
+          <div className="col-span-12 lg:col-span-3 space-y-3 flex flex-col lg:overflow-y-auto lg:min-h-0 scrollbar-thin">
+            <Panel title="AI DJ BRAIN" accent="purple" headerRight={
+              decision ? (
+                <button
+                  onClick={async () => { await fetch('/api/agent', { method: 'DELETE' }); setAgentData({ latestDecision: null, recentDecisions: [], totalDecisions: 0 }); }}
+                  className="text-[9px] text-gray-600 hover:text-red-400 transition-colors cursor-pointer px-1.5 py-0.5 rounded bg-white/[0.03] border border-white/5"
+                >
+                  Clear
+                </button>
+              ) : undefined
+            }>
               {decision ? (
                 <div className="space-y-3">
                   <div>
@@ -792,9 +832,11 @@ function DashboardContent() {
                       </div>
                       <span className="text-[10px] font-bold tracking-[0.15em] text-gray-500 uppercase">Reasoning</span>
                     </div>
-                    <p className="text-sm text-gray-300 leading-relaxed">
-                      {decision.reasoning}
-                    </p>
+                    <div className="max-h-[25vh] overflow-y-auto scrollbar-thin pr-1">
+                      <p className="text-sm text-gray-300 leading-relaxed">
+                        {decision.reasoning}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -832,9 +874,9 @@ function DashboardContent() {
               )}
             </Panel>
 
-            <Panel title="VOTE FEED" accent="cyan" className="flex-1 max-h-[25vh] overflow-y-auto">
+            <Panel title="VOTE FEED" accent="cyan">
               {recentVotes.length > 0 ? (
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 max-h-[20vh] overflow-y-auto scrollbar-thin">
                   {[...recentVotes].reverse().map((v) => {
                     const meta = VOTE_ICONS[v.voteType] || { icon: '•', color: 'text-gray-300' };
                     return (
@@ -866,21 +908,8 @@ function DashboardContent() {
         </div>
 
         {/* Footer */}
-        <footer className="mt-2 flex items-center justify-center gap-4 py-1.5 shrink-0">
-          <button
-            onClick={() => sessionCode && setShowQR(true)}
-            className="glass rounded-xl px-5 py-2.5 flex items-center gap-3 hover:bg-white/[0.03] transition-colors cursor-pointer"
-          >
-            <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="3" height="3" />
-              <rect x="18" y="18" width="3" height="3" />
-            </svg>
-            <span className="text-gray-400 text-xs">Show QR</span>
-          </button>
-          <div className="text-[10px] text-gray-700 tracking-wide">
+        <footer className="mt-1 flex items-center justify-center py-1 shrink-0">
+          <div className="text-[9px] text-gray-700 tracking-wide">
             <span className="text-purple-500/40">Dedalus</span> · <span className="text-cyan-500/40">K2 Think</span> · <span className="text-pink-500/40">Flowglad</span>
           </div>
         </footer>
@@ -894,11 +923,13 @@ function Panel({
   children,
   className = '',
   accent = 'purple',
+  headerRight,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
   accent?: 'purple' | 'cyan' | 'magenta';
+  headerRight?: React.ReactNode;
 }) {
   const accentColors = {
     purple: 'from-purple-500',
@@ -908,7 +939,10 @@ function Panel({
   return (
     <div className={`glass rounded-xl p-4 relative overflow-hidden ${className}`}>
       <div className={`absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r ${accentColors[accent]} to-transparent opacity-40`} />
-      <h2 className="text-[10px] font-bold text-gray-500 tracking-[0.2em] mb-3 uppercase">{title}</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-[10px] font-bold text-gray-500 tracking-[0.2em] uppercase">{title}</h2>
+        {headerRight}
+      </div>
       {children}
     </div>
   );

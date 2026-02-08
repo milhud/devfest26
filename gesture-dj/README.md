@@ -15,6 +15,9 @@ npm run ws-server        # → ws://localhost:8080
 
 # Terminal 3: DJ Agent
 npm run agent            # → K2 Think reasoning loop
+
+# Terminal 4: DJ Booth (hand-tracking)
+cd ../web && python3 server.py  # → http://localhost:8000
 ```
 
 ## Tech Stack
@@ -24,18 +27,20 @@ npm run agent            # → K2 Think reasoning loop
 - **AI Agent** — K2 Think via Dedalus SDK (Python)
 - **Billing** — Flowglad (vote credits)
 - **Real-time** — WebSocket server + HTTP broadcast
+- **DJ Booth** — MediaPipe hand tracking + Tone.js stem audio (FastAPI)
 - **Music Gen** — ElevenLabs (via music queue API)
 
 ## Project Structure
 
 | Path | Purpose |
 |------|---------|
+| `../web/` | DJ Booth — hand-tracking + stem audio (opens from dashboard) |
 | `/vote` | Audience voting UI (mobile-first) |
 | `/dashboard` | DJ presentation screen (projector) |
 | `/api/vote` | Vote aggregation (session-scoped) |
 | `/api/agent` | Agent decision store |
 | `/api/music-queue` | Music generation queue |
-| `server/ws-server.ts` | Real-time message routing |
+| `server/ws-server.ts` | Real-time message routing (cv→viz+dashboard) |
 | `agent/dj_agent.py` | K2 Think reasoning loop |
 
 ## Env Setup

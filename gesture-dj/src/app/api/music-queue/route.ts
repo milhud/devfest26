@@ -78,6 +78,12 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// DELETE: Clear the entire music queue
+export async function DELETE() {
+  musicQueue.length = 0;
+  return NextResponse.json({ success: true, message: 'Music queue cleared' });
+}
+
 // PATCH: Teammates update item status (generating → ready, add audioUrl, etc.)
 export async function PATCH(req: NextRequest) {
   try {

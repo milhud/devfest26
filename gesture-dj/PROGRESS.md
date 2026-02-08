@@ -1,8 +1,8 @@
 # GESTURE DJ — Progress Log
 
 **Owner:** Milhud  
-**Last updated:** Feb 7, 2026 10:28pm ET  
-**Status:** ✅ All systems operational. 9/9 E2E tests passing.
+**Last updated:** Feb 7, 2026 11:01pm ET  
+**Status:** ✅ All systems operational. Stream A (DJ Booth) integrated. 9/9 E2E tests passing.
 
 ---
 
@@ -62,10 +62,23 @@
 - **`POST /api/sessions`** — create/join sessions with 6-char codes
 
 ### WebSocket Server (`ws://localhost:8080`)
-- Routes messages between cv → viz, agent → viz + cv + dashboard, votes → agent + viz + dashboard
+- Routes messages between cv → viz + dashboard, agent → viz + cv + dashboard, votes → agent + viz + dashboard
 - **HTTP `/broadcast` endpoint** — API routes POST here to broadcast messages without maintaining WS clients (reliable from Next.js API routes)
 - Health check endpoint at `/health`
 - Client types: `cv`, `viz`, `agent`, `dashboard`, `votes`
+
+### DJ Booth — Stream A (`http://localhost:8000`)
+- **Merged from `hud` branch** — teammate's hand-tracking DJ app, now integrated with the main system
+- **FastAPI server** serves static frontend + music stems from `web/` and `music/` directories
+- **MediaPipe hand landmarks** — in-browser hand tracking via `handTracker.js`
+- **Gesture recognition** — finger count (stem select), open palm hold (play/pause), pinch height (volume), wave/flick (track switch), right-hand fingers (effects)
+- **Tone.js audio engine** — stem-based playback with per-stem gain, master volume, looping, sync start
+- **DJ Controller** — bridges gestures to audio engine actions with debouncing and Kalman filtering
+- **Canvas overlay UI** — hand skeleton drawing, finger count indicator, mixer strip with knobs/meters/scope
+- **WS Bridge** (`wsBridge.js`) — connects to WS server as `cv` client, sends gesture + audio state at 10 updates/sec
+- **Dashboard integration** — dashboard connects as WS `dashboard` client, receives live CV data, shows track/stem/status/gesture/volume in Stream A panel
+- **Launch from dashboard** — "LAUNCH DJ BOOTH" button opens `http://localhost:8000` in a new window; panel switches to live state view when connected
+- **Staleness detection** — dashboard auto-detects DJ Booth disconnect after 3s of no CV data
 
 ### Vote Aggregation System
 - **Session-scoped** — `getAggregator(sessionCode)` returns isolated aggregator per session via `Map`
@@ -98,6 +111,9 @@
 | 5 | **Agent HTTP session reuse** — single `aiohttp.ClientSession` across all agent requests | Eliminates per-request TCP overhead |
 | 6 | **Vote page layout** — hero DROP button + 3 semantic pairs with gradient divider labels | More visually stunning and intuitive |
 | 7 | **Dashboard viewport fit** — full-height layout, columns stretch, panels scroll internally | No empty space at bottom |
+| 8 | **DJ Booth integration (Stream A)** — merged `hud` branch, added `wsBridge.js`, wired WS routing cv→dashboard, dashboard shows live gesture/audio state | Full hand-tracking → dashboard data flow |
+| 9 | **Agent websockets fix** — fixed `ClientConnection.closed` AttributeError for newer websockets lib | Agent WS broadcast + clean shutdown work correctly |
+| 10 | **Dashboard DJ Booth launcher** — "LAUNCH DJ BOOTH" button opens DJ Booth in new window, live state panel with staleness detection | One-click launch from presenter screen |
 
 ---
 
@@ -139,11 +155,11 @@ Audience Phone → /vote → POST /api/vote (+ sessionCode)
 
 ---
 
-## What's NOT Built Yet (teammate parts)
+## What's NOT Built Yet
 
-1. **Stream A: CV + Audio Engine** — MediaPipe hands → gesture params → Tone.js
+1. ~~**Stream A: CV + Audio Engine**~~ — **DONE.** DJ Booth integrated from `hud` branch.
 2. **Stream B: 3D Visualization** — Three.js/R3F reacting to VizParams + agent actions
-3. **ElevenLabs consumer** — poll `/api/music-queue?status=queued`, generate audio, PATCH back with `audioUrl`
+3. ~~**ElevenLabs consumer**~~ — **DONE.** `npm run music-consumer` polls queue → ElevenLabs sound generation → Supabase Storage upload → PATCH audioUrl. Dashboard auto-plays.
 4. **Flowglad product setup** — create "DJ Vote Credits" product in Flowglad dashboard
 
 ---
@@ -152,13 +168,19 @@ Audience Phone → /vote → POST /api/vote (+ sessionCode)
 
 ```bash
 # Terminal 1: Next.js
-cd gesture-dj && npm run dev        # → http://localhost:3000
+cd gesture-dj && npm run dev            # → http://localhost:3000
 
 # Terminal 2: WebSocket server
-cd gesture-dj && npm run ws-server  # → ws://localhost:8080
+cd gesture-dj && npm run ws-server      # → ws://localhost:8080
 
 # Terminal 3: DJ Agent
-cd gesture-dj && npm run agent      # → polls APIs, calls K2 Think
+cd gesture-dj && npm run agent          # → polls APIs, calls K2 Think
+
+# Terminal 4: DJ Booth
+cd web && python3 server.py             # → http://localhost:8000
+
+# Terminal 5: ElevenLabs Music Consumer
+cd gesture-dj && npm run music-consumer # → polls queue, generates music, uploads to Supabase
 ```
 
 ### Test the Agent
@@ -177,3 +199,5 @@ cd gesture-dj && python3 agent/test_agent.py
 - **Flowglad test mode** — payments work in test mode with test cards.
 - **Audio autoplay** — browsers may block autoplay until user interacts with the page. The play/pause button handles this.
 - **WS broadcast** — uses HTTP POST to `/broadcast` instead of maintaining a WS client from API routes (Next.js Turbopack doesn't reliably persist module-level WS connections).
+- **DJ Booth requires camera** — browser will prompt for camera access on start. Works best in Chrome.
+- **Start order matters** — start WS server (Terminal 2) before the agent (Terminal 3) and DJ Booth (Terminal 4) to avoid connection errors on first cycle.

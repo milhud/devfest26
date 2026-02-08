@@ -108,3 +108,32 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================
+-- 4. Storage bucket for generated music (ElevenLabs output)
+-- ============================================================
+-- Run this in Supabase SQL Editor OR let the music-consumer
+-- auto-create it on first run via the Storage API.
+--
+-- Manual alternative in Supabase Dashboard:
+--   Storage → New bucket → Name: "music" → Public: ON
+--
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'music',
+  'music',
+  true,
+  10485760, -- 10 MB
+  array['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/webm']
+)
+on conflict (id) do nothing;
+
+-- Allow public reads (anyone can play the audio)
+create policy "Public read access for music bucket"
+  on storage.objects for select
+  using (bucket_id = 'music');
+
+-- Allow service role uploads (the consumer uses service role key)
+create policy "Service role upload for music bucket"
+  on storage.objects for insert
+  with check (bucket_id = 'music');

@@ -1,10 +1,10 @@
 # GESTURE DJ — Teammate Handoff
 
-**Last updated:** Feb 7, 2026 10:28pm ET
+**Last updated:** Feb 7, 2026 11:01pm ET
 
 ## How to Run Everything
 
-You need **3 terminals** running simultaneously:
+You need **4 terminals** running simultaneously:
 
 ```bash
 # Terminal 1: Next.js app (frontend + APIs)
@@ -21,6 +21,11 @@ npm run ws-server
 cd gesture-dj
 npm run agent
 # → polls /api/vote and /api/music-queue, posts decisions to /api/agent
+
+# Terminal 4: DJ Booth (hand-tracking + stem audio)
+cd web
+python3 server.py
+# → http://localhost:8000
 ```
 
 ---
@@ -137,8 +142,8 @@ const ws = new WebSocket('ws://localhost:8080?type=viz');
 ### Message routing
 
 | Source | Routed to |
-|--------|-----------|
-| `cv` | viz |
+|--------|----------|
+| `cv` | viz, dashboard |
 | `agent` | viz, cv, dashboard |
 | `votes` | agent, viz, dashboard |
 
@@ -165,7 +170,7 @@ The vote API uses this automatically — every vote is broadcast in real-time.
 
 - From `agent`: `{ source: "agent", type: "agent_decision", data: { actions, audioState } }`
 - From `votes`: `{ source: "votes", type: "vote_cast", data: { vote, aggregation } }`
-- From `cv`: gesture parameter updates
+- From `cv`: `{ source: "cv", type: "gesture_update", data: { gesture, audio } }` — live hand-tracking + stem audio state
 
 ### Agent actions your viz should react to
 
@@ -207,10 +212,92 @@ Agent env is in `gesture-dj/agent/.env` (same DEDALUS_API_KEY).
 
 ## What's NOT Built Yet (your part)
 
-1. **Stream A: CV + Audio Engine** — MediaPipe hands → gesture params → Tone.js audio
+1. ~~**Stream A: CV + Audio Engine**~~ — **DONE.** See DJ Booth section below.
 2. **Stream B: 3D Visualization** — Three.js/R3F scene reacting to VizParams
 3. **ElevenLabs consumer** — poll `/api/music-queue?status=queued`, generate audio, PATCH back
 4. **Flowglad product** — create "DJ Vote Credits" product in Flowglad dashboard with slug `dj-vote-credits`
+
+---
+
+## DJ Booth (Stream A) — Integrated
+
+The hand-tracking DJ booth runs as a **separate app** at `http://localhost:8000` (served by FastAPI from `web/`). It connects to the WS server as a `cv` client and streams gesture + audio state to the dashboard in real-time.
+
+### How it works
+
+1. **Dashboard** → click **LAUNCH DJ BOOTH** button (opens `http://localhost:8000` in a new window)
+2. **DJ Booth** → click **START DJ BOOTH** → allows camera → MediaPipe hand tracking begins
+3. **Gestures control audio** — stem selection (finger count), play/pause (open palm hold), volume (pinch height), track switch (wave), effects (right hand fingers)
+4. **State streams to dashboard** — gesture + audio state sent to WS server at 10 updates/sec → routed to dashboard
+5. **Dashboard shows live state** — Stream A panel shows track, stem, status, gesture type, and per-stem volume bars
+
+### Gesture controls
+
+| Gesture | Hand | Action |
+|---------|------|--------|
+| Hold 1-3 fingers | Left | Select stem 1-3 |
+| Open palm hold (650ms) | Left | Play/pause toggle |
+| Pinch + raise/lower | Left | Stem volume (height = volume) |
+| Wave / flick | Left | Next track |
+| Hold 1-3 fingers | Right | Trigger effect 1-3 |
+
+### CV → Dashboard WS message shape
+
+```json
+{
+  "source": "cv",
+  "type": "gesture_update",
+  "data": {
+    "gesture": {
+      "fingerCount": 2,
+      "handDetected": true,
+      "isPinching": false,
+      "volume": 0.65,
+      "stemSelect": 1,
+      "playPause": false,
+      "trackSwitch": false,
+      "isFist": false,
+      "isOpen": false,
+      "effectTrigger": 0
+    },
+    "audio": {
+      "trackFolder": "track1",
+      "trackIndex": 0,
+      "selectedStem": 1,
+      "stemVolumes": [0.35, 0.65, 0],
+      "isPlaying": true,
+      "isTrackLoading": false,
+      "volume": 0.65,
+      "stemCount": 3
+    }
+  },
+  "timestamp": 1770522840716
+}
+```
+
+### Key files
+
+```
+web/
+├── server.py                          # FastAPI server (port 8000)
+├── static/
+│   ├── index.html                     # DJ Booth UI
+│   ├── css/styles.css                 # Styling
+│   └── js/
+│       ├── main.js                    # App entry — init, render loop
+│       ├── handTracker.js             # MediaPipe hand landmark detection
+│       ├── gestureDetector.js         # Gesture recognition (pinch, wave, fingers)
+│       ├── audioEngine.js             # Tone.js stem-based playback
+│       ├── djController.js            # Bridges gestures → audio engine
+│       ├── uiRenderer.js              # Canvas overlay + HUD updates
+│       ├── kalmanFilter.js            # Smoothing for volume control
+│       ├── wsBridge.js                # WebSocket bridge to WS server (cv client)
+│       └── config.js                  # Thresholds, model path, landmarks
+music/
+├── track1/stem1-3.wav                 # Audio stems for track 1
+├── track2/stem1-3.wav                 # Audio stems for track 2
+└── effects/effect1-3.mp3              # One-shot sound effects
+```
 
 ---
 
@@ -223,7 +310,7 @@ Agent env is in `gesture-dj/agent/.env` (same DEDALUS_API_KEY).
 │  +sessionCode│    │  +session    │    │  +audio player│
 └──────────────┘    └──────┬───────┘    └──────┬───────┘
                            │                    │
-                    HTTP POST /broadcast        │
+                    HTTP POST /broadcast        │ WS (dashboard client)
                            ↓                    │
                     ┌──────────────┐    ┌───────▼──────┐
                     │  WS Server   │    │  /api/agent  │
@@ -231,12 +318,13 @@ Agent env is in `gesture-dj/agent/.env` (same DEDALUS_API_KEY).
                     └──┬───┬───┬──┘    └──────▲───────┘
                        │   │   │              │
                       viz  cv  dashboard      │
-                                       ┌──────┴───────┐
-                                       │  DJ Agent    │
-                                       │  (Python)    │
-                                       │  K2 Think    │
-                                       └──────┬───────┘
-                                              │
+                            ↑                 │
+                    ┌───────┴──────┐   ┌──────┴───────┐
+                    │  DJ Booth   │   │  DJ Agent    │
+                    │  :8000      │   │  (Python)    │
+                    │  MediaPipe  │   │  K2 Think    │
+                    │  + Tone.js  │   └──────┬───────┘
+                    └─────────────┘          │
                                        ┌──────▼───────────┐
                                        │ /api/music-queue │
                                        │ (prompt queue)   │
@@ -261,7 +349,7 @@ gesture-dj/
 │   ├── login/page.tsx                   # Google OAuth login
 │   ├── role-select/page.tsx             # DJ vs Audience role picker
 │   ├── vote/page.tsx                    # Voting UI (session-scoped)
-│   ├── dashboard/page.tsx               # Dashboard + audio player
+│   ├── dashboard/page.tsx               # Dashboard + audio player + DJ Booth launcher
 │   ├── auth/callback/route.ts           # OAuth redirect handler
 │   └── api/
 │       ├── vote/route.ts                # Vote POST/GET (session-scoped, WS broadcast)
@@ -275,7 +363,7 @@ gesture-dj/
 │   ├── flowglad.ts                      # FlowgladServer factory
 │   └── supabase/                        # Supabase client/server/middleware
 ├── src/middleware.ts                     # Auth guard
-├── server/ws-server.ts                  # WebSocket bridge + HTTP /broadcast
+├── server/ws-server.ts                  # WebSocket bridge + HTTP /broadcast (cv→viz+dashboard)
 ├── agent/
 │   ├── dj_agent.py                      # K2 Think reasoning loop
 │   ├── test_agent.py                    # Agent test script
@@ -284,4 +372,26 @@ gesture-dj/
 ├── .env.example                         # Env var template
 ├── HANDOFF.md                           # This file
 └── PROGRESS.md                          # Build progress log
+
+web/                                     # DJ Booth (Stream A) — separate app
+├── server.py                            # FastAPI server (port 8000)
+├── requirements.txt                     # Python deps (fastapi, uvicorn)
+└── static/
+    ├── index.html                       # DJ Booth UI
+    ├── css/styles.css                   # Full-screen camera + HUD styling
+    └── js/
+        ├── main.js                      # App entry, render loop
+        ├── handTracker.js               # MediaPipe hand landmarks
+        ├── gestureDetector.js           # Gesture recognition
+        ├── audioEngine.js               # Tone.js stem playback
+        ├── djController.js              # Gesture → audio bridge
+        ├── uiRenderer.js                # Canvas overlay + mixer HUD
+        ├── kalmanFilter.js              # Smooth volume tracking
+        ├── wsBridge.js                  # WS bridge (cv client → :8080)
+        └── config.js                    # Thresholds + constants
+
+music/                                   # Shared audio assets
+├── track1/stem1-3.wav
+├── track2/stem1-3.wav
+└── effects/effect1-3.mp3
 ```
