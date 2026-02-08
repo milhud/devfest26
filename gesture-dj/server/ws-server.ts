@@ -41,6 +41,9 @@ const server = http.createServer((req, res) => {
           broadcast('viz', msg);
           broadcast('cv', msg);
           broadcast('dashboard', msg);
+        } else if (source === 'cv') {
+          broadcast('viz', msg);
+          broadcast('dashboard', msg);
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -74,8 +77,9 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
 
       switch (source) {
         case 'cv':
-          // Forward gesture params to viz clients
+          // Forward gesture params to viz + dashboard clients
           broadcast('viz', msg);
+          broadcast('dashboard', msg);
           break;
 
         case 'agent':

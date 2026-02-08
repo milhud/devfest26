@@ -127,6 +127,34 @@ function DashboardContent() {
     totalDecisions: number;
   }>({ latestDecision: null, recentDecisions: [], totalDecisions: 0 });
 
+  // DJ Booth live state (from CV client via WS)
+  const [djBoothState, setDjBoothState] = useState<{
+    gesture: {
+      fingerCount: number;
+      handDetected: boolean;
+      isPinching: boolean;
+      volume: number;
+      stemSelect: number;
+      playPause: boolean;
+      trackSwitch: boolean;
+      isFist: boolean;
+      isOpen: boolean;
+      effectTrigger: number;
+    } | null;
+    audio: {
+      trackFolder: string;
+      trackIndex: number;
+      selectedStem: number;
+      stemVolumes: number[];
+      isPlaying: boolean;
+      isTrackLoading: boolean;
+      volume: number;
+      stemCount: number;
+    } | null;
+  } | null>(null);
+  const [djBoothConnected, setDjBoothConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+
   // Audio player state
   const [nowPlaying, setNowPlaying] = useState<MusicQueueItem | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -235,6 +263,56 @@ function DashboardContent() {
     poll();
     const interval = setInterval(poll, 4000);
     return () => clearInterval(interval);
+  }, []);
+
+  // WebSocket connection to receive CV data from DJ Booth
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      try {
+        ws = new WebSocket('ws://localhost:8080?type=dashboard');
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('[Dashboard WS] Connected');
+        };
+
+        let staleTimer: ReturnType<typeof setTimeout> | null = null;
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.source === 'cv' && msg.type === 'gesture_update' && msg.data) {
+              setDjBoothState(msg.data);
+              setDjBoothConnected(true);
+              if (staleTimer) clearTimeout(staleTimer);
+              staleTimer = setTimeout(() => setDjBoothConnected(false), 3000);
+            }
+          } catch { /* ignore parse errors */ }
+        };
+
+        ws.onclose = () => {
+          console.log('[Dashboard WS] Disconnected');
+          setDjBoothConnected(false);
+          reconnectTimer = setTimeout(connect, 3000);
+        };
+
+        ws.onerror = () => {
+          setDjBoothConnected(false);
+        };
+      } catch {
+        reconnectTimer = setTimeout(connect, 3000);
+      }
+    };
+
+    connect();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) ws.close();
+    };
   }, []);
 
   const decision = agentData.latestDecision;
@@ -450,16 +528,81 @@ function DashboardContent() {
           {/* ── Center Column ── */}
           <div className="col-span-12 lg:col-span-6 space-y-3 flex flex-col">
             <div className="grid grid-cols-2 gap-3">
-              <div className="min-h-[140px] lg:min-h-[160px] glass rounded-xl flex items-center justify-center relative overflow-hidden group">
+              <div className="min-h-[140px] lg:min-h-[160px] glass rounded-xl flex flex-col relative overflow-hidden group p-3">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-transparent" />
-                <div className="relative z-10 text-center">
-                  <IconCamera className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <span className="text-gray-600 text-[10px] tracking-[0.15em] font-bold uppercase">Webcam + Gestures</span>
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/30 text-[9px] font-medium z-20">
+                  <div className={`w-1.5 h-1.5 rounded-full ${djBoothConnected ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                  <span className={djBoothConnected ? 'text-emerald-400' : 'text-gray-500'}>
+                    {djBoothConnected ? 'DJ Booth Live' : 'Stream A'}
+                  </span>
                 </div>
-                <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/30 text-[9px] text-gray-500 font-medium">
-                  <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-                  Stream A
-                </div>
+                {djBoothConnected && djBoothState ? (
+                  <div className="relative z-10 flex flex-col justify-between h-full pt-5">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500">Track</span>
+                        <span className="text-xs font-mono font-bold text-purple-300">
+                          {djBoothState.audio?.trackFolder?.toUpperCase() || '--'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500">Stem</span>
+                        <span className="text-xs font-mono font-bold text-cyan-300">
+                          {djBoothState.audio?.selectedStem != null && djBoothState.audio.selectedStem >= 0
+                            ? djBoothState.audio.selectedStem + 1
+                            : '--'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500">Status</span>
+                        <span className={`text-xs font-bold ${djBoothState.audio?.isPlaying ? 'text-emerald-400' : 'text-gray-500'}`}>
+                          {djBoothState.audio?.isPlaying ? 'PLAYING' : 'PAUSED'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500">Gesture</span>
+                        <span className="text-xs font-mono font-bold text-orange-300">
+                          {djBoothState.gesture?.handDetected
+                            ? djBoothState.gesture.isPinching
+                              ? 'PINCH'
+                              : djBoothState.gesture.isOpen
+                                ? 'OPEN'
+                                : djBoothState.gesture.isFist
+                                  ? 'FIST'
+                                  : `${djBoothState.gesture.fingerCount}F`
+                            : 'NO HAND'}
+                        </span>
+                      </div>
+                      {djBoothState.audio?.stemVolumes && (
+                        <div className="flex gap-1 mt-1">
+                          {djBoothState.audio.stemVolumes.map((vol: number, i: number) => (
+                            <div key={i} className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-200 ${
+                                  djBoothState.audio?.selectedStem === i
+                                    ? 'bg-gradient-to-r from-purple-400 to-cyan-400'
+                                    : 'bg-white/20'
+                                }`}
+                                style={{ width: `${Math.round(vol * 100)}%` }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative z-10 flex flex-col items-center justify-center h-full gap-2">
+                    <IconCamera className="w-7 h-7 text-gray-600" />
+                    <button
+                      onClick={() => window.open('http://localhost:8000', 'dj-booth', 'width=1280,height=800')}
+                      className="px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-bold tracking-wider hover:bg-purple-500/25 transition-colors cursor-pointer"
+                    >
+                      LAUNCH DJ BOOTH
+                    </button>
+                    <span className="text-gray-600 text-[9px]">Opens in new window</span>
+                  </div>
+                )}
               </div>
               <div className="min-h-[140px] lg:min-h-[160px] glass rounded-xl flex items-center justify-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/5 to-transparent" />

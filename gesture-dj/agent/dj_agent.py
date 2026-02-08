@@ -112,8 +112,11 @@ class DJAgent:
         """Clean up resources."""
         if self._http_session and not self._http_session.closed:
             await self._http_session.close()
-        if self.ws_connection and not self.ws_connection.closed:
-            await self.ws_connection.close()
+        if self.ws_connection:
+            try:
+                await self.ws_connection.close()
+            except Exception:
+                pass
 
     def get_set_timeline_minutes(self) -> float:
         return (time.time() - self.set_start_time) / 60.0
@@ -337,11 +340,18 @@ Reason about what the crowd needs right now. Consider:
         })
 
         try:
-            if self.ws_connection is None or self.ws_connection.closed:
+            if self.ws_connection is None:
                 self.ws_connection = await websockets.connect(
                     f"{WS_SERVER_URL}?type=agent"
                 )
-            await self.ws_connection.send(msg)
+            try:
+                await self.ws_connection.send(msg)
+            except Exception:
+                # Reconnect on stale connection
+                self.ws_connection = await websockets.connect(
+                    f"{WS_SERVER_URL}?type=agent"
+                )
+                await self.ws_connection.send(msg)
         except Exception as e:
             print(f"[DJ Agent] WS broadcast failed (non-fatal): {e}")
 
