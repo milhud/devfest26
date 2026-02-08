@@ -100,6 +100,20 @@ class DJAgent:
         self.current_scene_complexity = 0.5
         self.current_animation_intensity = 0.5
         self.ws_connection = None
+        self._http_session: aiohttp.ClientSession | None = None
+
+    async def get_http_session(self) -> aiohttp.ClientSession:
+        """Reuse a single HTTP session across all requests."""
+        if self._http_session is None or self._http_session.closed:
+            self._http_session = aiohttp.ClientSession()
+        return self._http_session
+
+    async def close(self):
+        """Clean up resources."""
+        if self._http_session and not self._http_session.closed:
+            await self._http_session.close()
+        if self.ws_connection and not self.ws_connection.closed:
+            await self.ws_connection.close()
 
     def get_set_timeline_minutes(self) -> float:
         return (time.time() - self.set_start_time) / 60.0
@@ -107,10 +121,10 @@ class DJAgent:
     async def fetch_music_queue_status(self) -> dict:
         """Fetch current music queue status from the Next.js API."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{NEXT_JS_BASE_URL}/api/music-queue") as resp:
-                    if resp.status == 200:
-                        return await resp.json()
+            session = await self.get_http_session()
+            async with session.get(f"{NEXT_JS_BASE_URL}/api/music-queue") as resp:
+                if resp.status == 200:
+                    return await resp.json()
         except Exception as e:
             print(f"[DJ Agent] Failed to fetch music queue: {e}")
         return {"queued": 0, "generating": 0, "ready": 0, "total": 0, "queue": []}
@@ -118,11 +132,11 @@ class DJAgent:
     async def fetch_vote_aggregation(self) -> dict:
         """Fetch current vote aggregation from the Next.js API."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{NEXT_JS_BASE_URL}/api/vote") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get("aggregation", {})
+            session = await self.get_http_session()
+            async with session.get(f"{NEXT_JS_BASE_URL}/api/vote") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("aggregation", {})
         except Exception as e:
             print(f"[DJ Agent] Failed to fetch votes: {e}")
         return {
@@ -278,35 +292,35 @@ Reason about what the crowd needs right now. Consider:
                 "duration_seconds": track_params.get("duration_seconds", 30),
                 "agentReasoning": reasoning,
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{NEXT_JS_BASE_URL}/api/music-queue",
-                    json=payload,
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        print(f"  -> [Music Queue] Queued: {data.get('item', {}).get('id')}")
-                    else:
-                        print(f"  -> [Music Queue] Failed: {resp.status}")
+            session = await self.get_http_session()
+            async with session.post(
+                f"{NEXT_JS_BASE_URL}/api/music-queue",
+                json=payload,
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    print(f"  -> [Music Queue] Queued: {data.get('item', {}).get('id')}")
+                else:
+                    print(f"  -> [Music Queue] Failed: {resp.status}")
         except Exception as e:
             print(f"  -> [Music Queue] Error: {e}")
 
     async def post_decision_to_api(self, decision: dict):
         """Post the decision to the Next.js /api/agent endpoint for dashboard display."""
         try:
-            async with aiohttp.ClientSession() as session:
-                payload = {
-                    "reasoning": decision.get("reasoning", ""),
-                    "actions": decision.get("actions", []),
-                    "confidence": decision.get("confidence", 0),
-                    "audioState": self.get_audio_state(),
-                }
-                async with session.post(
-                    f"{NEXT_JS_BASE_URL}/api/agent",
-                    json=payload,
-                ) as resp:
-                    if resp.status != 200:
-                        print(f"[DJ Agent] API post failed: {resp.status}")
+            session = await self.get_http_session()
+            payload = {
+                "reasoning": decision.get("reasoning", ""),
+                "actions": decision.get("actions", []),
+                "confidence": decision.get("confidence", 0),
+                "audioState": self.get_audio_state(),
+            }
+            async with session.post(
+                f"{NEXT_JS_BASE_URL}/api/agent",
+                json=payload,
+            ) as resp:
+                if resp.status != 200:
+                    print(f"[DJ Agent] API post failed: {resp.status}")
         except Exception as e:
             print(f"[DJ Agent] API post error (non-fatal): {e}")
 
@@ -402,6 +416,8 @@ async def main():
     except Exception as e:
         print(f"\n[DJ Agent] Fatal error: {e}")
         raise
+    finally:
+        await agent.close()
 
 
 if __name__ == "__main__":

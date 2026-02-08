@@ -1,0 +1,75 @@
+isDefault: false
+name: "Gesture DJ"
+features:
+  - type: "usage_credit_grant"
+    slug: "50_vote_credits"
+    name: "50 Vote Credits"
+    description: ""
+    amount: 50
+    renewalFrequency: "once"
+    active: true
+    usageMeterSlug: "vote_credits"
+products:
+  - product:
+      name: "Free Plan"
+      description: "Default plan"
+      active: true
+      default: true
+      slug: "free"
+    price:
+      intervalUnit: null
+      name: "Free Plan"
+      intervalCount: null
+      type: "single_payment"
+      trialPeriodDays: null
+      isDefault: true
+      unitPrice: 0
+      usageEventsPerUnit: null
+      active: true
+      slug: "free"
+      usageMeterId: null
+    features: []
+  - product:
+      name: "vote_credits"
+      active: true
+      singularQuantityLabel: "vote"
+      pluralQuantityLabel: "votes"
+      default: false
+      slug: "vote_credits"
+    price:
+      intervalUnit: "month"
+      intervalCount: 1
+      type: "usage"
+      trialPeriodDays: null
+      isDefault: true
+      unitPrice: 0
+      usageEventsPerUnit: 1
+      active: true
+      slug: "vote_credits"
+      usageMeterSlug: "vote_credits"
+    features: []
+  - product:
+      name: "DJ Vote Credits"
+      description: ""
+      imageURL: ""
+      active: true
+      default: false
+      slug: "dj-vote-credits"
+    price:
+      intervalUnit: null
+      name: "Default Price"
+      intervalCount: null
+      type: "single_payment"
+      trialPeriodDays: null
+      isDefault: true
+      unitPrice: 199
+      usageEventsPerUnit: null
+      active: true
+      slug: "dj-vote-credits"
+      usageMeterId: null
+    features:
+      - "50_vote_credits"
+usageMeters:
+  - name: "vote_credits"
+    slug: "vote_credits"
+    aggregationType: "sum"

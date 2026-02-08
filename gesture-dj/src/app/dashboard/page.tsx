@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { VoteAggregation, Vote } from '@/lib/types';
@@ -127,6 +127,39 @@ function DashboardContent() {
     totalDecisions: number;
   }>({ latestDecision: null, recentDecisions: [], totalDecisions: 0 });
 
+  // Audio player state
+  const [nowPlaying, setNowPlaying] = useState<MusicQueueItem | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Auto-play next ready track
+  const playTrack = useCallback(async (item: MusicQueueItem) => {
+    if (!item.audioUrl) return;
+    setNowPlaying(item);
+    setIsPlaying(true);
+    // Mark as playing
+    try {
+      await fetch('/api/music-queue', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, status: 'playing' }),
+      });
+    } catch { /* non-fatal */ }
+  }, []);
+
+  // Check for next ready track when queue updates
+  useEffect(() => {
+    if (!isPlaying && musicQueue.ready > 0) {
+      const nextReady = musicQueue.queue.find((i) => i.status === 'ready' && i.audioUrl);
+      if (nextReady) playTrack(nextReady);
+    }
+  }, [musicQueue, isPlaying, playTrack]);
+
+  const handleAudioEnded = useCallback(() => {
+    setIsPlaying(false);
+    setNowPlaying(null);
+  }, []);
+
   // Poll session member count
   useEffect(() => {
     if (!sessionCode) return;
@@ -159,7 +192,7 @@ function DashboardContent() {
   useEffect(() => {
     const poll = async () => {
       try {
-        const res = await fetch('/api/vote');
+        const res = await fetch(`/api/vote${sessionCode ? `?session=${sessionCode}` : ''}`);
         if (res.ok) {
           const data = await res.json();
           setAggregation(data.aggregation);
@@ -475,6 +508,54 @@ function DashboardContent() {
                 </span>
               </div>
             </Panel>
+
+            {/* Now Playing */}
+            {nowPlaying && (
+              <Panel title="NOW PLAYING" accent="magenta">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/10 flex items-center justify-center">
+                      <IconMusic className="w-5 h-5 text-purple-400" />
+                    </div>
+                    {isPlaying && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#0a0a1a] animate-pulse" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white/90">{nowPlaying.genre}</span>
+                      <span className="text-gray-600 text-[10px] font-mono">{nowPlaying.bpm}bpm</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 truncate">{nowPlaying.prompt.slice(0, 60)}...</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (audioRef.current) {
+                        if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
+                        else { audioRef.current.play(); setIsPlaying(true); }
+                      }
+                    }}
+                    className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    {isPlaying ? (
+                      <svg className="w-3.5 h-3.5 text-white/70" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 text-white/70" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                    )}
+                  </button>
+                </div>
+                {nowPlaying.audioUrl && (
+                  <audio
+                    ref={audioRef}
+                    src={nowPlaying.audioUrl}
+                    autoPlay
+                    onEnded={handleAudioEnded}
+                    onError={() => { setIsPlaying(false); setNowPlaying(null); }}
+                    className="hidden"
+                  />
+                )}
+              </Panel>
+            )}
 
             {/* Music Generation Queue */}
             <Panel title="MUSIC QUEUE" accent="cyan">

@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { Vote, VoteType } from '@/lib/types';
-import { voteAggregator } from '@/lib/vote-aggregator';
+import { Vote, VoteType, VoteAggregation } from '@/lib/types';
+import { getAggregator } from '@/lib/vote-aggregator';
+// Broadcast votes via HTTP POST to WS server's /broadcast endpoint
+// (more reliable than maintaining a WS client from Next.js API routes)
+function broadcastVote(vote: Vote, aggregation: VoteAggregation) {
+  const wsHttpUrl = process.env.WS_SERVER_HTTP_URL || 'http://localhost:8080';
+  fetch(`${wsHttpUrl}/broadcast`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      source: 'votes',
+      type: 'vote_cast',
+      data: { vote, aggregation },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => { /* non-fatal — WS server may not be running */ });
+}
 
 const VALID_VOTE_TYPES: VoteType[] = [
   'energy_up',
@@ -28,7 +43,7 @@ setInterval(() => {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, voteType, voteValue } = body;
+    const { userId, voteType, voteValue, sessionCode } = body;
 
     if (!userId || !voteType) {
       return NextResponse.json(
@@ -63,21 +78,20 @@ export async function POST(req: NextRequest) {
       timestamp: Date.now(),
     };
 
-    // Add to aggregator
-    voteAggregator.addVote(vote);
+    // Add to session-scoped aggregator
+    const aggregator = getAggregator(sessionCode);
+    aggregator.addVote(vote);
 
     // Get current aggregation
-    const aggregation = voteAggregator.getLatestAggregation();
+    const aggregation = aggregator.getLatestAggregation();
+
+    // Broadcast to WS for real-time updates
+    broadcastVote(vote, aggregation);
 
     return NextResponse.json({
       success: true,
       voteId: vote.id,
-      aggregation: {
-        total: aggregation.total,
-        isHypeSpike: aggregation.isHypeSpike,
-        dominantVote: aggregation.dominantVote,
-        energyBias: aggregation.energyBias,
-      },
+      aggregation,
     });
   } catch (error) {
     console.error('Vote submission error:', error);
@@ -88,9 +102,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
-  const aggregation = voteAggregator.getLatestAggregation();
-  const recentVotes = voteAggregator.getRecentVotes(20);
+export async function GET(req: NextRequest) {
+  const sessionCode = req.nextUrl.searchParams.get('session') || undefined;
+  const aggregator = getAggregator(sessionCode);
+  const aggregation = aggregator.getLatestAggregation();
+  const recentVotes = aggregator.getRecentVotes(20);
 
   return NextResponse.json({
     aggregation,

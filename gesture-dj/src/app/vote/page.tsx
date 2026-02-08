@@ -276,7 +276,7 @@ function VoteContent() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch('/api/vote');
+        const res = await fetch(`/api/vote${sessionCode ? `?session=${sessionCode}` : ''}`);
         if (res.ok) {
           const data = await res.json();
           setAggregation(data.aggregation);
@@ -346,7 +346,7 @@ function VoteContent() {
         const res = await fetch('/api/vote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, voteType, voteValue }),
+          body: JSON.stringify({ userId, voteType, voteValue, sessionCode }),
         });
 
         const data = await res.json();

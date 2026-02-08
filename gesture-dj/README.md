@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gesture DJ
 
-## Getting Started
+An interactive AI-powered DJ booth for DevFest 2026. The audience votes on their phones to shape the music, visuals, and energy of a live set — powered by K2 Think reasoning, ElevenLabs music generation, and real-time 3D visuals.
 
-First, run the development server:
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+
+# Terminal 1: Next.js app
+npm run dev              # → http://localhost:3000
+
+# Terminal 2: WebSocket server
+npm run ws-server        # → ws://localhost:8080
+
+# Terminal 3: DJ Agent
+npm run agent            # → K2 Think reasoning loop
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Frontend** — Next.js 16, React 19, Tailwind CSS v4, TypeScript
+- **Auth** — Supabase (Google OAuth)
+- **AI Agent** — K2 Think via Dedalus SDK (Python)
+- **Billing** — Flowglad (vote credits)
+- **Real-time** — WebSocket server + HTTP broadcast
+- **Music Gen** — ElevenLabs (via music queue API)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project Structure
 
-## Learn More
+| Path | Purpose |
+|------|---------|
+| `/vote` | Audience voting UI (mobile-first) |
+| `/dashboard` | DJ presentation screen (projector) |
+| `/api/vote` | Vote aggregation (session-scoped) |
+| `/api/agent` | Agent decision store |
+| `/api/music-queue` | Music generation queue |
+| `server/ws-server.ts` | Real-time message routing |
+| `agent/dj_agent.py` | K2 Think reasoning loop |
 
-To learn more about Next.js, take a look at the following resources:
+## Env Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Copy `.env.example` to `.env.local` and fill in the values. See `.env.example` for details.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Docs
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **[HANDOFF.md](./HANDOFF.md)** — Teammate integration guide (APIs, WS, types)
+- **[PROGRESS.md](./PROGRESS.md)** — Build progress log + E2E test results

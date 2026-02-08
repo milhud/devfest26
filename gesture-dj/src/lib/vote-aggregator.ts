@@ -86,5 +86,17 @@ class VoteAggregator {
   }
 }
 
-// Singleton for the server
-export const voteAggregator = new VoteAggregator();
+// Session-scoped aggregators
+const sessionAggregators = new Map<string, VoteAggregator>();
+
+export function getAggregator(sessionCode: string = '__global__'): VoteAggregator {
+  let agg = sessionAggregators.get(sessionCode);
+  if (!agg) {
+    agg = new VoteAggregator();
+    sessionAggregators.set(sessionCode, agg);
+  }
+  return agg;
+}
+
+// Backwards-compatible default (used when no session specified)
+export const voteAggregator = getAggregator();

@@ -22,6 +22,37 @@ const server = http.createServer((req, res) => {
     }));
     return;
   }
+
+  // HTTP broadcast endpoint — lets API routes push messages without maintaining WS clients
+  if (req.url === '/broadcast' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const msg = JSON.parse(body);
+        const source = msg.source || 'unknown';
+
+        // Route like a normal WS message
+        if (source === 'votes') {
+          broadcast('agent', msg);
+          broadcast('viz', msg);
+          broadcast('dashboard', msg);
+        } else if (source === 'agent') {
+          broadcast('viz', msg);
+          broadcast('cv', msg);
+          broadcast('dashboard', msg);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404);
   res.end();
 });
@@ -48,16 +79,19 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
           break;
 
         case 'agent':
-          // Forward agent decisions to viz + audio clients
+          // Forward agent decisions to viz + audio + dashboard clients
           broadcast('viz', msg);
           broadcast('cv', msg);
+          broadcast('dashboard', msg);
           // Also store latest decision for the API to read
           latestAgentDecision = msg;
           break;
 
         case 'votes':
-          // Forward vote updates to agent
+          // Forward vote updates to agent, viz, and dashboard
           broadcast('agent', msg);
+          broadcast('viz', msg);
+          broadcast('dashboard', msg);
           break;
 
         default:
