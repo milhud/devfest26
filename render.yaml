@@ -1,0 +1,34 @@
+# Render Blueprint — Gesture DJ Backend Services
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ── WebSocket Server (Node.js) ──────────────────────────────────────
+  - type: web
+    name: gesture-dj-ws
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: gesture-dj
+    buildCommand: npm install
+    startCommand: npx tsx server/ws-server.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # ── DJ Agent (Python) ───────────────────────────────────────────────
+  - type: worker
+    name: gesture-dj-agent
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: gesture-dj/agent
+    buildCommand: pip install -r requirements.txt
+    startCommand: python dj_agent.py
+    envVars:
+      - key: DEDALUS_API_KEY
+        sync: false
+      - key: WS_SERVER_URL
+        sync: false
+      - key: NEXT_JS_BASE_URL
+        sync: false

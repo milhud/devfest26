@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 
-const PORT = parseInt(process.env.WS_PORT || '8080');
+const PORT = parseInt(process.env.PORT || process.env.WS_PORT || '8080');
 
 interface Client {
   ws: WebSocket;
